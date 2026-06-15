@@ -120,10 +120,11 @@ def _dispatch_webhook(
         emit_diagnostic("webhook: no URL configured; channel disabled")
         return
 
-    # Only POST to http(s) — a webhook URL is operator config, and urlopen would
-    # otherwise honour file:// / custom schemes (local-file read / SSRF surface).
-    if not url.lower().startswith(("http://", "https://")):
-        emit_diagnostic(f"webhook: refusing non-http(s) URL '{url}'; channel disabled")
+    # Require https — alerts carry spend/instance data, so don't send them over
+    # cleartext, and urlopen would otherwise honour file:// / custom schemes
+    # (local-file read / SSRF surface).
+    if not url.lower().startswith("https://"):
+        emit_diagnostic(f"webhook: refusing non-https URL '{url}'; channel disabled")
         return
 
     import urllib.request

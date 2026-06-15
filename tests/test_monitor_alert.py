@@ -261,15 +261,16 @@ class TestDefaultSenderDegrades:
 
 
 class TestWebhookSchemeGuard:
-    """Webhook refuses non-http(s) URLs (no file:// / custom-scheme open)."""
+    """Webhook requires https — refuses file:// and cleartext http://."""
 
-    def test_file_scheme_is_refused(
-        self, breach_finding: Finding, capsys: pytest.CaptureFixture
+    @pytest.mark.parametrize("bad_url", ["file:///etc/passwd", "http://hooks.example.com/x"])
+    def test_non_https_url_is_refused(
+        self, breach_finding: Finding, capsys: pytest.CaptureFixture, bad_url: str
     ) -> None:
         dispatch(
             [breach_finding],
             channels=["webhook"],
-            channel_config={"webhook": {"url": "file:///etc/passwd"}},
+            channel_config={"webhook": {"url": bad_url}},
         )
         err = capsys.readouterr().err.lower()
-        assert "refusing" in err and "http" in err
+        assert "refusing" in err and "https" in err
