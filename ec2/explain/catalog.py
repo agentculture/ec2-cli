@@ -23,9 +23,11 @@ buildable/deployable package baseline. Clone it, rename the package, edit
 - `ec2 whoami` — identity probe from `culture.yaml`.
 - `ec2 learn` — structured self-teaching prompt.
 - `ec2 explain <path>` — markdown docs for any noun/verb.
-- `ec2 overview` — descriptive snapshot of the agent.
+- `ec2 overview` — live dashboard: fleet + EC2 cost figures (MTD/YTD/forecast).
+- `ec2 instance` — manage instances (list, start, stop, spend limit).
+- `ec2 monitor` — spend monitoring (check, daemon start/stop/status).
 - `ec2 doctor` — check the agent-identity invariants.
-- `ec2 cli overview` — describe the CLI surface.
+- `ec2 cli overview` — describe the CLI surface (descriptive self-report).
 
 ## Exit-code policy
 

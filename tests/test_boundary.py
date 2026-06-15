@@ -12,11 +12,19 @@ from pathlib import Path
 
 import pytest
 
+# Both the PascalCase API names (catch docstrings/comments implying the
+# capability) AND the snake_case boto3 client methods / service identifiers a
+# *real* call uses — checking only PascalCase is vacuous, because boto3 clients
+# are invoked as client.terminate_instances(...) / build_client("budgets").
 _FORBIDDEN = [
     "TerminateInstances",
+    "terminate_instances",
     "ModifyInstanceAttribute",
+    "modify_instance_attribute",
     "Budgets",
+    '"budgets"',
     "CloudWatch",
+    '"cloudwatch"',
 ]
 
 
