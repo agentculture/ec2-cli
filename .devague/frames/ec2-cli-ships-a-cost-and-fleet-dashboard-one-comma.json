@@ -1,0 +1,509 @@
+{
+  "slug": "ec2-cli-ships-a-cost-and-fleet-dashboard-one-comma",
+  "title": "ec2-cli ships a cost-and-fleet dashboard: one command shows your EC2 instances alongside spend \u2014 month-to-date, year-to-date, and forecast cost for the rest of the month and year \u2014 as a table or --json.",
+  "schema_version": 1,
+  "status": "exported",
+  "created": "2026-06-15T17:08:44Z",
+  "updated": "2026-06-15T17:34:43Z",
+  "claims": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "ec2-cli ships a cost-and-fleet dashboard: one command shows your EC2 instances alongside spend \u2014 month-to-date, year-to-date, and forecast cost for the rest of the month and year \u2014 as a table or --json.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h9",
+          "text": "A user with valid AWS creds runs 'ec2 overview' and the four figures + fleet render correctly and match the AWS console; the whole surface (overview/instance/monitor) honours --json and the structured-error contract.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [
+        {
+          "id": "q2",
+          "text": "risk: AWS dependency: pulling in boto3 breaks the repo's current dependencies=[] / dependency-free runtime invariant; the SDK approach is a load-bearing decision.",
+          "resolved": false,
+          "blocking": false
+        }
+      ],
+      "links": []
+    },
+    {
+      "id": "c2",
+      "kind": "audience",
+      "text": "An AWS user (human operator or mesh agent) who wants a single at-a-glance answer to 'what am I running and what is it costing me' without opening the AWS console or stitching together describe-instances + Cost Explorer by hand.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h10",
+          "text": "A real user (operator or mesh agent) currently answers 'what am I running + spending' by stitching describe-instances + Cost Explorer by hand; the single command demonstrably replaces that workaround.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c3",
+      "kind": "after_state",
+      "text": "One command (e.g. 'ec2 dashboard' / 'ec2 costs') prints the live EC2 fleet plus four spend figures \u2014 month-to-date actual, year-to-date actual, forecast end-of-month, forecast end-of-year \u2014 as a human table and, with --json, a structured payload.",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [],
+      "hard_questions": [
+        {
+          "id": "q1",
+          "text": "Is 'cost' scoped to EC2 service only, or total account spend? They differ a lot and need different Cost Explorer filters.",
+          "resolved": false,
+          "blocking": false
+        },
+        {
+          "id": "q3",
+          "text": "risk: Command-name collision: the existing 'overview' verb is descriptive (agent self-report); reusing that name for a live-AWS view would conflate two very different behaviours.",
+          "resolved": false,
+          "blocking": false
+        }
+      ],
+      "links": []
+    },
+    {
+      "id": "c4",
+      "kind": "before_state",
+      "text": "Today the repo has zero EC2/AWS functionality (dependencies = []); the only 'overview' is the template's descriptive agent-introspection verb. To get this answer a user must run AWS CLI describe-instances and Cost Explorer queries separately and do the math themselves.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h11",
+          "text": "Verified against the repo: today dependencies=[] and no EC2/AWS code exists; the only 'overview' is the descriptive introspection verb.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c5",
+      "kind": "why_it_matters",
+      "text": "Cost surprise is the #1 EC2 pain; a single trustworthy 'running + spend + forecast' view turns reactive bill-shock into a glanceable habit, and it's the first real domain capability that makes ec2-cli an EC2 manager rather than a scaffold.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h12",
+          "text": "The feature is justified only because MTD/YTD + forecast together pre-empt bill-shock; if cost-surprise weren't the driver the forecast figures would be pointless.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c6",
+      "kind": "success_signal",
+      "text": "A user with valid AWS credentials runs one command and sees their instances and all four cost figures correctly; --json output is machine-parseable; missing creds/permissions/region produce a structured error with a hint, never a traceback.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h13",
+          "text": "An end-to-end test with a mocked AWS client shows fleet + all four figures rendered, --json parseable, and error paths structured \u2014 the signal is observable, not aspirational.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c7",
+      "kind": "boundary",
+      "text": "Read-only and report-only: it does NOT launch/start/stop/terminate instances, does NOT create budgets or alarms, and does NOT give cost-optimization advice. Forecast figures are AWS's own numbers (Cost Explorer GetCostForecast), not a model we invent.",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c8",
+      "kind": "non_goal",
+      "text": "Not a replacement for the existing descriptive 'overview' verb (which describes the agent); this is a distinct domain command that talks to a live AWS account.",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c9",
+      "kind": "requirement",
+      "text": "MTD and YTD actual spend come from AWS Cost Explorer GetCostAndUsage (UnblendedCost, MONTHLY granularity, time periods = first-of-month..today and first-of-year..today).",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h1",
+          "text": "Re-running on a known account, MTD/YTD figures match the AWS Cost Explorer console for the same dates to the cent (same UnblendedCost metric, same date math).",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c10",
+      "kind": "requirement",
+      "text": "Forecast end-of-month and end-of-year come from AWS Cost Explorer GetCostForecast (UNBLENDED_COST) for today..end-of-month and today..end-of-year.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h2",
+          "text": "GetCostForecast is called with a valid future period; when AWS refuses (too little history / start must be in the future), we degrade to a clear 'forecast unavailable' line, not a crash.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "The live fleet comes from EC2 DescribeInstances, summarised per instance (id, type, state, name tag, AZ) in the chosen region.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h3",
+          "text": "DescribeInstances pagination is handled (NextToken) so accounts with >1 page of instances are fully listed, and an empty fleet renders cleanly (not an error).",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c12",
+      "kind": "requirement",
+      "text": "The command honours the agent-first output contract: human table by default, --json for structured payload, results to stdout, errors to stderr, and credential/permission/region failures raise CliError -> structured error with a hint, never a traceback.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h4",
+          "text": "On missing creds, missing ce:/ec2: permission, and unset region, the command exits non-zero with error:/hint: lines and zero stdout \u2014 verified by tests that monkeypatch the AWS client.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c13",
+      "kind": "assumption",
+      "text": "The account has AWS Cost Explorer enabled (it is opt-in, activates ~24h after first enable, and GetCostAndUsage/GetCostForecast bill ~$0.01 per request).",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c14",
+      "kind": "assumption",
+      "text": "AWS access uses the standard credential chain (env vars / shared profile / IMDS role); no new auth mechanism is introduced.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c15",
+      "kind": "decision",
+      "text": "Cost scope = EC2 service only: Cost Explorer is filtered to the EC2 service so spend figures line up with the listed fleet.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c16",
+      "kind": "decision",
+      "text": "AWS access = boto3, lazy-imported inside the AWS verbs only; introspection verbs (whoami/learn) keep working dep-free and a missing boto3 yields a clean CliError.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c17",
+      "kind": "decision",
+      "text": "Top-level 'ec2 overview' becomes the live fleet+cost dashboard (the user's named command); the descriptive agent self-report stays reachable via 'cli overview' so the teken rubric stays 26/26.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c18",
+      "kind": "decision",
+      "text": "Add an 'ec2 instance' noun: 'ec2 instance' (no verb) lists/shows instances; 'instance start|stop <id>' controls power; 'instance limit <id> <amount> [--monthly|--yearly]' sets a spend cap used by monitor.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c19",
+      "kind": "decision",
+      "text": "Add an 'ec2 monitor' capability: a recurring check (every ~5 min) that compares per-machine and total spend vs configured monthly/yearly limits, alerts on threshold breach and on spend spikes, and can auto-stop a machine over its limit.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c20",
+      "kind": "boundary",
+      "text": "It can start/stop and auto-stop instances and set tool-side spend limits, but it does NOT terminate or resize instances, and limits are tracked by this tool (local config) \u2014 it does not create AWS-native Budgets or CloudWatch alarms.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h14",
+          "text": "A contract/test asserts no code path calls TerminateInstances, ModifyInstanceAttribute(type), or Budgets/CloudWatch APIs \u2014 the boundary is enforced, not just stated.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c21",
+      "kind": "after_state",
+      "text": "'ec2 instance start|stop <id>' powers an instance up/down (with state waiters and a confirmation/--yes guard); 'ec2 instance' with no verb lists instances; 'ec2 instance limit <id> <amount> --monthly|--yearly' records a per-machine cap.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h15",
+          "text": "Each instance verb has a test: list renders, start/stop invoke the right AWS action behind --yes, limit persists to config and reads back.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c22",
+      "kind": "after_state",
+      "text": "'ec2 monitor' evaluates current spend vs limits once (and can loop every ~5 min), emitting an alert per breach/spike and, only when auto-stop is enabled for that target, stopping the offending instance; --json yields machine-parseable findings.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h16",
+          "text": "monitor check returns findings + non-zero exit on breach against a mocked client; the daemon loop is that same check on a timer; --json findings parse.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [
+        {
+          "id": "q4",
+          "text": "How does the 'independent process' run \u2014 a self-managed background daemon (start/stop/status + pidfile), an installed cron/systemd-timer that runs one-shot checks, or a foreground loop the user supervises?",
+          "resolved": false,
+          "blocking": false
+        },
+        {
+          "id": "q5",
+          "text": "Where do alerts go \u2014 stderr/log file, the AgentCulture mesh/IRC channel, a webhook/email, or desktop notification?",
+          "resolved": false,
+          "blocking": false
+        }
+      ],
+      "links": []
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "Per-machine and total spend limits (amount + monthly/yearly period + optional auto-stop flag) are persisted in a local config file and are the single source of truth the monitor evaluates against.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h5",
+          "text": "Limit config round-trips: written by 'instance limit', read identically by 'monitor', survives process restart, and a malformed/missing file degrades to a clear error or 'no limits set', not a crash.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c24",
+      "kind": "requirement",
+      "text": "Power verbs (start/stop) and auto-stop are write operations guarded for safety: a dry-run/preview is the default for destructive auto-stop, start/stop require confirmation or --yes, and operations are idempotent (already-running/already-stopped is a clean no-op).",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h6",
+          "text": "Tests prove start/stop are idempotent and that auto-stop in default (dry-run/alert-only) mode never calls StopInstances \u2014 verified by monkeypatching the AWS client and asserting no mutating call.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c25",
+      "kind": "requirement",
+      "text": "Auto-stop never fires unless explicitly enabled per-target (opt-in); the default monitor behaviour is alert-only.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h8",
+          "text": "A test confirms that with auto-stop disabled (the default) a breached limit produces an alert but zero StopInstances calls; auto-stop only fires when the target's limit was set with the explicit auto-stop flag.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c26",
+      "kind": "requirement",
+      "text": "Per-machine cost is ESTIMATED from instance-type on-demand price x running-hours (near-real-time, free), because Cost Explorer cannot cheaply give near-real-time per-instance cost; account/EC2 totals (overview's MTD/YTD) still come from Cost Explorer.",
+      "origin": "llm",
+      "status": "rejected",
+      "honesty_conditions": [
+        {
+          "id": "h7",
+          "text": "The per-machine estimate is labelled as an estimate in output, and its method (type price x hours) is documented so users don't mistake it for billed cost; a missing price for an instance type degrades gracefully.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c27",
+      "kind": "decision",
+      "text": "Monitor process model = a stateless 'ec2 monitor check' primitive (evaluate once, alert, exit non-zero on breach) plus a self-managed daemon 'ec2 monitor start|stop|status' (pidfile) that loops check every ~5 min.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c28",
+      "kind": "decision",
+      "text": "Alert channels: AgentCulture mesh = CULTURE.DEV is the native channel; optional log via OpenTelemetry (OTEL, lazy/optional dependency) and optional webhook POST; stderr + non-zero exit are always-on baseline. Desktop notification is out of scope.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c29",
+      "kind": "decision",
+      "text": "Optional dependencies are lazy-imported and isolated like boto3: OTEL only when log-alerting is enabled, webhook via stdlib; the base introspection CLI stays installable dependency-free.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c30",
+      "kind": "after_state",
+      "text": "'ec2 overview' prints the live EC2 fleet plus four EC2-service spend figures \u2014 MTD actual, YTD actual, forecast end-of-month, forecast end-of-year \u2014 as a human table and, with --json, a structured payload; the descriptive agent self-report moves to 'cli overview' so the rubric stays green.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h17",
+          "text": "overview renders fleet + four EC2-service figures while 'cli overview' still emits the descriptive self-report, and 'teken cli doctor . --strict' stays 26/26.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c31",
+      "kind": "non_goal",
+      "text": "Out of scope: instance termination, resizing/right-sizing advice, AWS-native Budgets/CloudWatch alarms, multi-account/Organizations roll-ups, and non-EC2 cost breakdowns.",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c32",
+      "kind": "decision",
+      "text": "v1 per-machine estimate is the LAYERED controller-side estimate: spot-or-on-demand hourly rate (chosen by InstanceLifecycle) x running hours + attached-EBS cost (which accrues even when stopped). It excludes RI/Savings-Plan discounts and data transfer (documented); Cost Explorer remains the billed-truth source.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c33",
+      "kind": "decision",
+      "text": "An optional on-machine cost-reporting add-on is a Phase-2 follow-up (own spec), NOT v1. When built, it writes periodic state+estimate heartbeats to CloudWatch Logs; ec2-cli reads them via the Logs API so a machine's last estimate survives stop/termination for post-mortem review. It still reports list-cost estimate, not RI/SP-discounted billed cost.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c34",
+      "kind": "decision",
+      "text": "Per-machine cost resolves via a fallback chain so the Phase-2 add-on slots in cleanly: add-on CloudWatch-Logs report (if present) -> spot/on-demand + EBS estimate -> on-demand-only estimate.",
+      "origin": "user",
+      "status": "confirmed",
+      "honesty_conditions": [],
+      "hard_questions": [],
+      "links": []
+    },
+    {
+      "id": "c35",
+      "kind": "requirement",
+      "text": "The monitor's per-machine cost figure is the layered estimate: pick spot vs on-demand rate by InstanceLifecycle, multiply by running hours, add attached-EBS cost (counted even when the instance is stopped); label it an estimate and list exclusions (RI/SP, data transfer).",
+      "origin": "llm",
+      "status": "confirmed",
+      "honesty_conditions": [
+        {
+          "id": "h18",
+          "text": "Tests show: a spot instance is priced at the spot rate (not on-demand), attached EBS is included even for a STOPPED instance, output labels the figure an estimate and names its exclusions, and a missing rate/volume lookup degrades cleanly via the fallback chain rather than crashing.",
+          "status": "confirmed"
+        }
+      ],
+      "hard_questions": [],
+      "links": []
+    }
+  ],
+  "open_vagueness": [
+    {
+      "id": "v1",
+      "text": "Optional on-machine cost-reporting add-on (Phase 2, own spec): instance-side component reads IMDS (type/region/lifecycle/spot), uptime, egress bytes and EBS; emits periodic state+estimate heartbeats to CloudWatch Logs; ec2-cli reads them back (survives instance termination for post-mortem). Open design: install path (user-data/SSM/AMI), retention policy, IAM scoping. Cannot see RI/SP discounts.",
+      "kind": "follow_up",
+      "claim_id": null
+    }
+  ]
+}

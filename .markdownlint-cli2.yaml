@@ -21,3 +21,9 @@ ignores:
   - ".teken/**"
   # Vendored skills are cited verbatim from guildmaster — do not reformat them.
   - ".claude/skills/**"
+  # devague-generated artifacts (spec/plan/review exports). Machine-authored —
+  # they legitimately carry command-syntax placeholders like `<id>` (MD033) and
+  # announcement-derived headings ending in '.' (MD026); don't lint generated output.
+  - "docs/specs/**"
+  - "docs/plans/**"
+  - ".devague/**"
