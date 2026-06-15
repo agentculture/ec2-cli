@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ec2.cli._output import emit_diagnostic, emit_result
 from ec2.monitor import alert
+from ec2.monitor.daemon import _gather_spend, _period_bounds
 from ec2.monitor.daemon import start as daemon_start
 from ec2.monitor.daemon import status as daemon_status
 from ec2.monitor.daemon import stop as daemon_stop
@@ -60,17 +61,14 @@ def cmd_check(args: argparse.Namespace) -> int:
 
     limits = load_limits()
     now = datetime.now(timezone.utc)
-    period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    period_end = period_start.replace(day=period_start.day + 1)
-    if period_end <= period_start:
-        period_end = period_start.replace(day=period_start.day + 2)
+    per_machine_spend, total_spend = _gather_spend()
 
     findings = evaluate(
         limits=limits,
-        per_machine_spend={},
-        total_spend=0.0,
+        per_machine_spend=per_machine_spend,
+        total_spend=total_spend,
         now=now,
-        period_bounds=(period_start, period_end),
+        period_bounds=_period_bounds(now),
     )
 
     if findings:

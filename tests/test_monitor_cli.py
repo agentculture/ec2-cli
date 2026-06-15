@@ -468,3 +468,50 @@ class TestMonitorParseRoundtrip:
 
         args = parent.parse_args(["monitor", "start", "--interval", "60"])
         assert args.interval == 60
+
+
+# ---------------------------------------------------------------------------
+# Spend gathering + period bounds (the data layer wired into check)
+# ---------------------------------------------------------------------------
+
+
+class TestSpendGathering:
+    """_period_bounds is month-aligned; _gather_spend wires real total spend."""
+
+    def test_period_bounds_month_aligned(self) -> None:
+        from datetime import datetime, timezone
+
+        from ec2.monitor.daemon import _period_bounds
+
+        start, end = _period_bounds(datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc))
+        assert (start.year, start.month, start.day) == (2026, 6, 1)
+        assert (start.hour, start.minute, start.second) == (0, 0, 0)
+        assert (end.year, end.month, end.day) == (2026, 7, 1)
+
+    def test_period_bounds_december_rolls_to_next_year(self) -> None:
+        from datetime import datetime, timezone
+
+        from ec2.monitor.daemon import _period_bounds
+
+        _start, end = _period_bounds(datetime(2026, 12, 31, 23, 0, tzinfo=timezone.utc))
+        assert (end.year, end.month, end.day) == (2027, 1, 1)
+
+    def test_gather_spend_degrades_without_aws(self, capsys: pytest.CaptureFixture) -> None:
+        """No boto3/creds -> ({}, 0.0) + a diagnostic, not a crash."""
+        from ec2.monitor.daemon import _gather_spend
+
+        per_machine, total = _gather_spend()
+        assert per_machine == {}
+        assert total == 0.0
+        assert "aws unavailable" in capsys.readouterr().err.lower()
+
+    def test_gather_spend_returns_real_total(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """With AWS available, total comes from Cost Explorer cost_mtd."""
+        monkeypatch.setattr("ec2.aws.client.build_client", lambda *a, **k: object())
+        monkeypatch.setattr("ec2.aws.cost.cost_mtd", lambda _client: 137.5)
+
+        from ec2.monitor.daemon import _gather_spend
+
+        per_machine, total = _gather_spend()
+        assert per_machine == {}
+        assert total == 137.5

@@ -11,6 +11,7 @@ import os
 import signal
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ec2.cli._output import emit_diagnostic
@@ -36,32 +37,69 @@ def _read_pid(pidfile: Path) -> int | None:
         return None
 
 
+def _period_bounds(now: datetime) -> tuple[datetime, datetime]:
+    """Current-month bounds ``[first-of-month 00:00, first-of-next-month 00:00)``.
+
+    Month-aligned so the evaluator's run-rate projection is meaningful for
+    monthly limits. (Aligning the window to yearly limits is a documented
+    follow-up — hard-breach detection is correct regardless of the window.)
+    """
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    if start.month == 12:
+        end = start.replace(year=start.year + 1, month=1)
+    else:
+        end = start.replace(month=start.month + 1)
+    return start, end
+
+
+def _gather_spend() -> tuple[dict[str, float], float]:
+    """Return ``(per_machine_spend, total_spend)`` for the current month.
+
+    ``total_spend`` is real EC2 month-to-date spend from Cost Explorer, so a
+    monthly *total* limit is enforced end-to-end. ``per_machine_spend`` is left
+    empty for now: it needs a price/usage-gathering layer (on-demand/spot rate ×
+    running hours + EBS) — t5 built the estimate *formula* but nothing fetches
+    its inputs yet. See the FOLLOW-UP note in the build plan.
+
+    When AWS *setup* is unavailable (no boto3 / credentials / region) the spend
+    can't be read this cycle: emit a diagnostic and report zero spend so the
+    monitor degrades rather than crashing (the daemon must survive; a one-shot
+    check shouldn't traceback). For a hard error on a broken AWS setup, use the
+    action verb ``ec2 instance``.
+    """
+    from ec2.cli._errors import CliError
+
+    try:
+        from ec2.aws.client import build_client
+        from ec2.aws.cost import cost_mtd
+
+        ce_client = build_client("ce", region="us-east-1")
+        return {}, cost_mtd(ce_client)
+    except CliError as err:
+        emit_diagnostic(f"monitor: AWS unavailable ({err.message}); spend assumed 0 this cycle")
+        return {}, 0.0
+
+
 def _run_check() -> list:
-    """Run a single monitor check cycle.
+    """Run a single monitor check cycle: gather spend, evaluate, dispatch.
 
     Imports are lazy so boto3 is not required at module level.
     Returns the list of findings from evaluate.
     """
-    from datetime import datetime, timezone
-
     from ec2.limits import load_limits
     from ec2.monitor.alert import dispatch
     from ec2.monitor.evaluate import evaluate
 
     limits = load_limits()
     now = datetime.now(timezone.utc)
-    # Use a 24-hour rolling window for the period bounds.
-    period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    period_end = period_start.replace(day=period_start.day + 1)
-    if period_end <= period_start:
-        period_end = period_start.replace(day=period_start.day + 2)
+    per_machine_spend, total_spend = _gather_spend()
 
     findings = evaluate(
         limits=limits,
-        per_machine_spend={},
-        total_spend=0.0,
+        per_machine_spend=per_machine_spend,
+        total_spend=total_spend,
         now=now,
-        period_bounds=(period_start, period_end),
+        period_bounds=_period_bounds(now),
     )
 
     if findings:
@@ -78,7 +116,10 @@ def _loop(interval: float = 300.0) -> None:
     emit_diagnostic(f"monitor daemon: loop started (interval={interval}s)")
     try:
         while True:
-            _run_check()
+            try:
+                _run_check()
+            except Exception as exc:  # a transient AWS error must not kill the daemon
+                emit_diagnostic(f"monitor daemon: check failed ({exc}); continuing")
             time.sleep(interval)
     except KeyboardInterrupt:
         emit_diagnostic("monitor daemon: loop stopped")
@@ -158,8 +199,12 @@ def status(pidfile: Path) -> dict[str, object]:
     Keys:
         - running (bool): whether the daemon is currently running.
         - pid (int | None): PID of the running daemon, or None.
+        - stale (bool): True when a pidfile exists but its PID is dead
+          (a crashed/leftover daemon), distinct from never-started.
     """
     pid = _read_pid(pidfile)
-    if pid is None or not _pid_alive(pid):
-        return {"running": False, "pid": None}
-    return {"running": True, "pid": pid}
+    if pid is None:
+        return {"running": False, "pid": None, "stale": False}
+    if not _pid_alive(pid):
+        return {"running": False, "pid": None, "stale": True}
+    return {"running": True, "pid": pid, "stale": False}
