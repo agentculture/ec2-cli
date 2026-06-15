@@ -1,0 +1,218 @@
+"""Tests for ec2.aws.cost — Cost Explorer spend and forecast (mocked CE client)."""
+
+from __future__ import annotations
+
+from datetime import date
+from unittest.mock import MagicMock
+
+from ec2.aws.cost import (
+    EC2_FILTER,
+    cost_mtd,
+    cost_ytd,
+    forecast_month,
+    forecast_unavailable,
+    forecast_year,
+)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _today() -> str:
+    return date.today().isoformat()
+
+
+def _first_of_month() -> str:
+    return date.today().replace(day=1).isoformat()
+
+
+def _first_of_year() -> str:
+    return date.today().replace(month=1, day=1).isoformat()
+
+
+def _end_of_month() -> str:
+    """Last day of the current month."""
+    today = date.today()
+    if today.month == 12:
+        return today.replace(month=12, day=31).isoformat()
+    return today.replace(month=today.month + 1, day=1).isoformat()
+
+
+def _end_of_year() -> str:
+    return date(date.today().year, 12, 31).isoformat()
+
+
+def _mock_client() -> MagicMock:
+    return MagicMock()
+
+
+# ---------------------------------------------------------------------------
+# EC2 filter shape
+# ---------------------------------------------------------------------------
+
+
+class TestEc2Filter:
+    def test_filter_shape(self) -> None:
+        assert EC2_FILTER == {
+            "Dimensions": {
+                "Key": "SERVICE",
+                "Values": ["Amazon Elastic Compute Cloud - Compute"],
+            }
+        }
+
+
+# ---------------------------------------------------------------------------
+# cost_mtd / cost_ytd
+# ---------------------------------------------------------------------------
+
+
+class TestCostMtd:
+    def test_calls_get_cost_and_usage(self) -> None:
+        client = _mock_client()
+        client.get_cost_and_usage.return_value = {
+            "ResultsByTime": [
+                {"TotalEstimate": {"UnblendedCost": {"Amount": "10.00", "Unit": "USD"}}}
+            ]
+        }
+
+        result = cost_mtd(client)
+
+        client.get_cost_and_usage.assert_called_once_with(
+            TimePeriod={"Start": _first_of_month(), "End": _today()},
+            Granularity="MONTHLY",
+            Metrics=["UnblendedCost"],
+            Filter=EC2_FILTER,
+        )
+        assert result == 10.0
+
+    def test_sums_multiple_groups(self) -> None:
+        client = _mock_client()
+        client.get_cost_and_usage.return_value = {
+            "ResultsByTime": [
+                {"TotalEstimate": {"UnblendedCost": {"Amount": "5.00", "Unit": "USD"}}},
+                {"TotalEstimate": {"UnblendedCost": {"Amount": "3.50", "Unit": "USD"}}},
+            ]
+        }
+
+        result = cost_mtd(client)
+        assert result == 8.5
+
+
+class TestCostYtd:
+    def test_calls_get_cost_and_usage(self) -> None:
+        client = _mock_client()
+        client.get_cost_and_usage.return_value = {
+            "ResultsByTime": [
+                {"TotalEstimate": {"UnblendedCost": {"Amount": "100.00", "Unit": "USD"}}}
+            ]
+        }
+
+        result = cost_ytd(client)
+
+        client.get_cost_and_usage.assert_called_once_with(
+            TimePeriod={"Start": _first_of_year(), "End": _today()},
+            Granularity="MONTHLY",
+            Metrics=["UnblendedCost"],
+            Filter=EC2_FILTER,
+        )
+        assert result == 100.0
+
+
+# ---------------------------------------------------------------------------
+# forecast_month / forecast_year
+# ---------------------------------------------------------------------------
+
+
+class TestForecastMonth:
+    def test_calls_get_cost_forecast(self) -> None:
+        client = _mock_client()
+        client.get_cost_forecast.return_value = {
+            "ForecastResults": [{"Total": {"UnblendedCost": {"Amount": "15.00", "Unit": "USD"}}}]
+        }
+
+        result = forecast_month(client)
+
+        client.get_cost_forecast.assert_called_once_with(
+            TimePeriod={"Start": _today(), "End": _end_of_month()},
+            Metric="UNBLENDED_COST",
+            Granularity="MONTHLY",
+            Filter=EC2_FILTER,
+        )
+        assert result["available"] is True
+        assert result["amount"] == 15.0
+
+    def test_returns_unavailable_on_data_unavailable(self) -> None:
+        client = _mock_client()
+
+        class DataUnavailableException(Exception):
+            pass
+
+        client.get_cost_forecast.side_effect = DataUnavailableException()
+
+        result = forecast_month(client)
+        assert result == forecast_unavailable()
+
+    def test_returns_unavailable_on_validation_exception(self) -> None:
+        client = _mock_client()
+
+        class ValidationException(Exception):
+            pass
+
+        client.get_cost_forecast.side_effect = ValidationException()
+
+        result = forecast_month(client)
+        assert result == forecast_unavailable()
+
+
+class TestForecastYear:
+    def test_calls_get_cost_forecast(self) -> None:
+        client = _mock_client()
+        client.get_cost_forecast.return_value = {
+            "ForecastResults": [{"Total": {"UnblendedCost": {"Amount": "200.00", "Unit": "USD"}}}]
+        }
+
+        result = forecast_year(client)
+
+        client.get_cost_forecast.assert_called_once_with(
+            TimePeriod={"Start": _today(), "End": _end_of_year()},
+            Metric="UNBLENDED_COST",
+            Granularity="MONTHLY",
+            Filter=EC2_FILTER,
+        )
+        assert result["available"] is True
+        assert result["amount"] == 200.0
+
+    def test_returns_unavailable_on_data_unavailable(self) -> None:
+        client = _mock_client()
+
+        class DataUnavailableException(Exception):
+            pass
+
+        client.get_cost_forecast.side_effect = DataUnavailableException()
+
+        result = forecast_year(client)
+        assert result == forecast_unavailable()
+
+    def test_returns_unavailable_on_validation_exception(self) -> None:
+        client = _mock_client()
+
+        class ValidationException(Exception):
+            pass
+
+        client.get_cost_forecast.side_effect = ValidationException()
+
+        result = forecast_year(client)
+        assert result == forecast_unavailable()
+
+
+# ---------------------------------------------------------------------------
+# forecast_unavailable sentinel
+# ---------------------------------------------------------------------------
+
+
+class TestForecastUnavailable:
+    def test_sentinel_shape(self) -> None:
+        sentinel = forecast_unavailable()
+        assert sentinel["available"] is False
+        assert "amount" not in sentinel or sentinel.get("amount") is None
