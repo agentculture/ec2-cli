@@ -117,6 +117,12 @@ def _dispatch_webhook(
         emit_diagnostic("webhook: no URL configured; channel disabled")
         return
 
+    # Only POST to http(s) — a webhook URL is operator config, and urlopen would
+    # otherwise honour file:// / custom schemes (local-file read / SSRF surface).
+    if not url.lower().startswith(("http://", "https://")):
+        emit_diagnostic(f"webhook: refusing non-http(s) URL '{url}'; channel disabled")
+        return
+
     import urllib.request
 
     data = json.dumps(alert, ensure_ascii=False).encode("utf-8")
@@ -127,7 +133,7 @@ def _dispatch_webhook(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req):
+        with urllib.request.urlopen(req):  # nosec B310 - scheme validated to http(s) above
             pass
     except Exception as exc:
         emit_diagnostic(f"webhook: POST to {url} failed: {exc}")

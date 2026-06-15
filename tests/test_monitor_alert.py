@@ -258,3 +258,18 @@ class TestDefaultSenderDegrades:
         stderr = capsys.readouterr().err
         # At minimum, the stderr baseline alert should be present
         assert breach_finding.target in stderr
+
+
+class TestWebhookSchemeGuard:
+    """Webhook refuses non-http(s) URLs (no file:// / custom-scheme open)."""
+
+    def test_file_scheme_is_refused(
+        self, breach_finding: Finding, capsys: pytest.CaptureFixture
+    ) -> None:
+        dispatch(
+            [breach_finding],
+            channels=["webhook"],
+            channel_config={"webhook": {"url": "file:///etc/passwd"}},
+        )
+        err = capsys.readouterr().err.lower()
+        assert "refusing" in err and "http" in err
