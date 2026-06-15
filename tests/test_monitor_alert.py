@@ -163,6 +163,35 @@ class TestOtelChannelDegrades:
             channels=["otel"],
         )
 
+    def test_otel_present_but_incompatible_api_degrades(
+        self,
+        breach_finding: Finding,
+        capsys: pytest.CaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """If opentelemetry IS importable but its API misbehaves (e.g. a
+        version whose logger rejects our call), the channel must degrade with
+        a diagnostic, not crash dispatch."""
+        import sys
+        import types
+
+        otel = types.ModuleType("opentelemetry")
+        _logs = types.ModuleType("opentelemetry._logs")
+
+        def _boom(*_a: Any, **_k: Any):
+            raise TypeError("incompatible OTEL logs API")
+
+        _logs.get_logger = _boom  # type: ignore[attr-defined]
+        otel._logs = _logs  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "opentelemetry", otel)
+        monkeypatch.setitem(sys.modules, "opentelemetry._logs", _logs)
+
+        # Must not raise.
+        dispatch([breach_finding], channels=["otel"])
+
+        stderr = capsys.readouterr().err
+        assert "otel" in stderr.lower()
+
 
 # ---------------------------------------------------------------------------
 # Acceptance 3: webhook channel

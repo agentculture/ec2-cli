@@ -76,17 +76,20 @@ def _dispatch_culture_dev(
 def _dispatch_otel(alert: dict[str, Any]) -> None:
     """Route alert to OTEL log.
 
-    Lazy-imports opentelemetry; if absent, emits a diagnostic and returns.
+    Lazy-imports opentelemetry. ANY failure — a missing dependency OR an
+    incompatible OTEL API/config — disables the channel with a diagnostic
+    rather than crashing dispatch. Every alert channel degrades gracefully;
+    an optional telemetry sink must never take down a breach alert.
     """
     try:
-        # Lazy import succeeded — use the logger
-        from opentelemetry import logs  # noqa: F401
-        from opentelemetry import trace  # noqa: F401
+        from opentelemetry import _logs
 
-        logger = logs.get_logger("ec2.alert")
+        logger = _logs.get_logger("ec2.alert")
         logger.info("EC2 alert", **alert)
     except ImportError:
         emit_diagnostic("otel: opentelemetry not installed; channel disabled")
+    except Exception as exc:  # optional channel must never crash dispatch
+        emit_diagnostic(f"otel: channel unavailable ({exc}); disabled")
 
 
 def _dispatch_webhook(
