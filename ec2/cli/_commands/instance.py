@@ -7,9 +7,12 @@ Sub-commands
 * ``ec2 instance stop <id>``  — stop an instance (requires ``--yes``)
 * ``ec2 instance limit <id> <amount> --monthly|--yearly [--auto-stop]``
   — persist a spend limit
+* ``ec2 instance delete <id>`` — *review* what terminating would destroy;
+  ``ec2 instance delete <id> --apply`` terminates (only after a fresh review).
 
-All mutating actions are idempotent: if the instance is already in the
-target state, no AWS call is made.
+Power actions (start/stop) are idempotent: if the instance is already in the
+target state, no AWS call is made. ``delete`` is the one irreversible verb and
+is gated behind a two-step review → ``--apply`` flow (see :mod:`ec2.deletion`).
 """
 
 from __future__ import annotations
@@ -19,10 +22,12 @@ import sys
 from dataclasses import asdict
 from typing import Any
 
+from ec2 import deletion
 from ec2.cli._errors import EXIT_USER_ERROR, CliError
 from ec2.cli._output import emit_diagnostic, emit_result
 
 _INSTANCE_ID_HELP = "Instance ID (e.g. i-0abc123)."
+REVIEW_TTL_MINUTES = deletion.REVIEW_TTL_SECONDS // 60
 
 
 def _get_client(args: argparse.Namespace) -> Any:
@@ -149,6 +154,135 @@ def cmd_instance_limit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _deletion_preview(client: Any, instance_id: str) -> dict[str, Any] | None:
+    """Return a snapshot of what terminating *instance_id* would destroy.
+
+    ``None`` when the instance is not found. AWS errors map to CliError via
+    :func:`ec2.aws.client.aws_call`.
+    """
+    from ec2.aws.client import aws_call
+
+    resp = aws_call(client.describe_instances, InstanceIds=[instance_id])
+    inst = None
+    for reservation in resp.get("Reservations", []):
+        for candidate in reservation.get("Instances", []):
+            if candidate.get("InstanceId") == instance_id:
+                inst = candidate
+    if inst is None:
+        return None
+
+    name = ""
+    for tag in inst.get("Tags", []) or []:
+        if tag.get("Key") == "Name":
+            name = tag.get("Value", "")
+    volumes = []
+    for bd in inst.get("BlockDeviceMappings", []):
+        ebs = bd.get("Ebs", {})
+        volumes.append(
+            {
+                "volume_id": ebs.get("VolumeId", ""),
+                "device": bd.get("DeviceName", ""),
+                "delete_on_termination": bool(ebs.get("DeleteOnTermination", False)),
+            }
+        )
+    return {
+        "id": instance_id,
+        "type": inst.get("InstanceType", ""),
+        "state": inst.get("State", {}).get("Name", ""),
+        "name": name,
+        "az": inst.get("Placement", {}).get("AvailabilityZone", ""),
+        "volumes": volumes,
+    }
+
+
+def _render_preview(preview: dict[str, Any]) -> str:
+    lines = [
+        f"# review: terminate {preview['id']} (IRREVERSIBLE)",
+        "",
+        "## Instance",
+        f"  {preview['id']}  {preview['type']}  {preview['state']}  "
+        f"{preview['name']}  {preview['az']}",
+        "",
+        "## EBS volumes that will be deleted on termination",
+    ]
+    deleted = [v for v in preview["volumes"] if v["delete_on_termination"]]
+    kept = [v for v in preview["volumes"] if not v["delete_on_termination"]]
+    if deleted:
+        for v in deleted:
+            lines.append(f"  - {v['volume_id']} ({v['device']})")
+    else:
+        lines.append("  (none)")
+    if kept:
+        lines.append("")
+        lines.append("## Volumes that will be DETACHED but kept (DeleteOnTermination=false)")
+        for v in kept:
+            lines.append(f"  - {v['volume_id']} ({v['device']})")
+    lines += [
+        "",
+        f"To terminate, run within {REVIEW_TTL_MINUTES} min:",
+        f"  ec2 instance delete {preview['id']} --apply",
+    ]
+    return "\n".join(lines)
+
+
+def cmd_instance_delete(args: argparse.Namespace) -> int:
+    """Review a termination (default) or ``--apply`` it after a fresh review."""
+    client = _get_client(args)
+    instance_id = args.instance_id
+    config_dir = getattr(args, "_config_dir", None)
+    json_mode = bool(getattr(args, "json", False))
+
+    if bool(getattr(args, "apply", False)):
+        if deletion.fresh_review(instance_id, config_dir=config_dir) is None:
+            raise CliError(
+                code=EXIT_USER_ERROR,
+                message=f"no fresh review for {instance_id} (required before --apply)",
+                remediation=(
+                    f"run 'ec2 instance delete {instance_id}' to review what will be "
+                    f"destroyed, then re-run with --apply within {REVIEW_TTL_MINUTES} min"
+                ),
+            )
+
+        from ec2.aws.client import aws_call
+
+        resp = aws_call(client.terminate_instances, InstanceIds=[instance_id])
+        deletion.clear_review(instance_id, config_dir=config_dir)
+
+        ti = (resp.get("TerminatingInstances") or [{}])[0]
+        result = {
+            "id": instance_id,
+            "previous_state": ti.get("PreviousState", {}).get("Name"),
+            "current_state": ti.get("CurrentState", {}).get("Name"),
+        }
+        if json_mode:
+            emit_result(result, json_mode=True)
+        else:
+            emit_result(
+                f"terminated {instance_id}: {result['previous_state']} -> "
+                f"{result['current_state']} (DeleteOnTermination volumes are deleted)",
+                json_mode=False,
+            )
+        return 0
+
+    # Review mode — never terminates.
+    preview = _deletion_preview(client, instance_id)
+    if preview is None:
+        raise CliError(
+            code=EXIT_USER_ERROR,
+            message=f"instance {instance_id} not found",
+            remediation="check the id with 'ec2 instance'",
+        )
+    deletion.record_review(instance_id, preview, config_dir=config_dir)
+    if json_mode:
+        emit_result(
+            {"review": preview, "apply_command": f"ec2 instance delete {instance_id} --apply"},
+            json_mode=True,
+        )
+    else:
+        emit_result(_render_preview(preview), json_mode=False)
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Parser registration
 # ---------------------------------------------------------------------------
@@ -163,7 +297,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     """Register the ``instance`` noun and its sub-commands on *sub*."""
     noun = sub.add_parser(
         "instance",
-        help="Manage EC2 instances (list, start, stop, limit).",
+        help="Manage EC2 instances (list, start, stop, limit, delete).",
     )
     noun.add_argument("--json", action="store_true", help="Emit structured JSON.")
     noun.set_defaults(func=_no_verb, json=False)
@@ -192,3 +326,17 @@ def register(sub: argparse._SubParsersAction) -> None:
         "--auto-stop", action="store_true", help="Auto-stop when limit is reached."
     )
     p_limit.set_defaults(func=cmd_instance_limit, monthly=False, yearly=False, auto_stop=False)
+
+    # -- delete ---------------------------------------------------------------
+    p_delete = sub_verb.add_parser(
+        "delete",
+        help="Review a termination; --apply terminates (irreversible).",
+    )
+    p_delete.add_argument("instance_id", help=_INSTANCE_ID_HELP)
+    p_delete.add_argument(
+        "--apply",
+        action="store_true",
+        help="Terminate now (only valid after a fresh review of the same id).",
+    )
+    p_delete.add_argument("--json", action="store_true", help="Emit structured JSON.")
+    p_delete.set_defaults(func=cmd_instance_delete, apply=False, json=False)

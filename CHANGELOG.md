@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-16
+
+### Added
+
+- ec2 instance delete — terminate an instance behind a two-step review -> --apply safety gate. `ec2 instance delete <id>` reviews what would be destroyed (instance + EBS volumes) and records a short-lived (15 min) review token without terminating; `ec2 instance delete <id> --apply` terminates only when a fresh review token for that id exists. --json on both steps.
+
+### Changed
+
+- Boundary: instance termination is no longer a non-goal — it is now a deliberate, review-gated feature. The boundary contract test still forbids resize (ModifyInstanceAttribute) and native budget/alarm APIs, but allows terminate_instances via ec2 instance delete.
+
 ## [0.4.0] - 2026-06-15
 
 ### Added
