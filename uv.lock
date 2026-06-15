@@ -155,7 +155,7 @@ wheels = [
 ]
 
 [[package]]
-name = "culture-agent-template"
+name = "ec2-cli"
 version = "0.2.1"
 source = { editable = "." }
 
