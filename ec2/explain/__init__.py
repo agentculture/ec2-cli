@@ -16,7 +16,7 @@ def resolve(path: tuple[str, ...]) -> str:
     raise CliError(
         code=EXIT_USER_ERROR,
         message=f"no explain entry for: {display}",
-        remediation="list entries with: ec2-cli explain ec2-cli",
+        remediation="list entries with: ec2 explain ec2",
     )
 
 

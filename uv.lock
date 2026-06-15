@@ -156,7 +156,7 @@ wheels = [
 
 [[package]]
 name = "ec2-cli"
-version = "0.2.1"
+version = "0.3.2"
 source = { editable = "." }
 
 [package.dev-dependencies]

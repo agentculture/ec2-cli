@@ -18,8 +18,8 @@ Agent and CLI for managing AWS EC2 machines (instances) — launch, inspect, sta
 ```bash
 uv sync
 uv run pytest -n auto                 # run the test suite
-uv run ec2-cli whoami  # identity from culture.yaml
-uv run ec2-cli learn   # self-teaching prompt (add --json)
+uv run ec2 whoami  # identity from culture.yaml (command is `ec2`; dist is `ec2-cli`)
+uv run ec2 learn   # self-teaching prompt (add --json)
 uv run teken cli doctor . --strict    # the agent-first rubric gate CI runs
 ```
 

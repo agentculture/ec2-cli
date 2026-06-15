@@ -1,4 +1,4 @@
-"""``ec2-cli learn`` — the learnability affordance.
+"""``ec2 learn`` — the learnability affordance.
 
 Prints a structured self-teaching prompt. Must satisfy the agent-first rubric:
 >=200 chars and mention purpose, command map, exit codes, --json, and explain.
@@ -12,7 +12,7 @@ from ec2 import __version__
 from ec2.cli._output import emit_result
 
 _TEXT = """\
-ec2-cli — a clonable template for AgentCulture mesh agents.
+ec2 — a clonable template for AgentCulture mesh agents.
 
 Purpose
 -------
@@ -23,12 +23,12 @@ rename the package, and edit culture.yaml to mint a new agent.
 
 Commands
 --------
-  ec2-cli whoami             Identity from culture.yaml.
-  ec2-cli learn              This self-teaching prompt.
-  ec2-cli explain <path>...  Markdown docs for any noun/verb path.
-  ec2-cli overview           Descriptive snapshot of the agent.
-  ec2-cli doctor             Check the agent-identity invariants.
-  ec2-cli cli overview       Describe the CLI surface itself.
+  ec2 whoami             Identity from culture.yaml.
+  ec2 learn              This self-teaching prompt.
+  ec2 explain <path>...  Markdown docs for any noun/verb path.
+  ec2 overview           Descriptive snapshot of the agent.
+  ec2 doctor             Check the agent-identity invariants.
+  ec2 cli overview       Describe the CLI surface itself.
 
 Machine-readable output
 -----------------------
@@ -44,13 +44,13 @@ Exit-code policy
 
 More detail
 -----------
-  ec2-cli explain ec2-cli
+  ec2 explain ec2
 """
 
 
 def _as_json_payload() -> dict[str, object]:
     return {
-        "tool": "ec2-cli",
+        "tool": "ec2",
         "version": __version__,
         "purpose": "Clonable scaffold for a new AgentCulture mesh agent.",
         "commands": [
@@ -67,7 +67,7 @@ def _as_json_payload() -> dict[str, object]:
             "2": "environment/setup error",
         },
         "json_support": True,
-        "explain_pointer": "ec2-cli explain <path>",
+        "explain_pointer": "ec2 explain <path>",
     }
 
 
