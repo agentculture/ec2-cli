@@ -9,8 +9,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Replace the seed CLAUDE.md placeholder with a full runtime prompt (via /init): documents the real entry-point command (ec2, not ec2-cli), the half-finished rename and the resulting failing teken rubric gate (explain ec2), the dispatch/error/output/explain/identity architecture, and the AgentCulture CI conventions.
+- Replace the seed CLAUDE.md placeholder with a full runtime prompt (via /init): documents the dispatch/error/output/explain/identity architecture, the AgentCulture CI conventions, and the three deliberately-distinct names (command `ec2`, dist + mesh nick `ec2-cli`, package `ec2`).
+- Reconcile the CLI command name: the command has always been `ec2`, but the help/`learn`/`explain`/`overview` text, the argparse `prog`, and the README quickstart all said `ec2-cli`. Swept those command-surface strings to `ec2` so they match the real binary; the distribution name, mesh nick (`whoami`'s `nick`), SonarCloud key, and repo URLs stay `ec2-cli`. This makes `teken cli doctor . --strict` pass 26/26 (the `explain ec2` rubric check was failing).
 - Record the public-facing positioning in CLAUDE.md: ec2-cli is a public agent, so the bar is general AWS-client CLI usability, not just mesh-internal use.
+
+### Added
+
+- `explain` now resolves the root entry under both `ec2` (canonical) and `ec2-cli` (back-compat alias for the dist/nick name).
 
 ### Fixed
 

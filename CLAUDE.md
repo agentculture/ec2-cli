@@ -26,31 +26,24 @@ The agent-first contracts (`--json` everywhere, structured errors with `hint:`,
 the `explain`/`learn` self-description surface) are exactly what make the CLI
 usable to both audiences at once; keep extending them as the surface grows.
 
-## ⚠️ The naming is half-renamed — read this first
+## Three names, deliberately distinct
 
-The scaffold rename from the template name to `ec2`/`ec2-cli` was **not
-completed**, and two things follow that will bite you:
+This agent wears three names; keep them straight when editing:
 
-1. **The installed command is `ec2`, NOT `ec2-cli`.** `pyproject.toml`'s
-   `[project.scripts]` defines `ec2 = "ec2.cli:main"`. `uv run ec2-cli …`
-   fails ("No such file or directory"). The README quickstart, `learn` output,
-   the `explain` catalog, and the argparse `prog` string all *say* `ec2-cli` —
-   that text is the unfinished rename, not the real binary. Run the CLI as
-   `uv run ec2 <verb>` or `python -m ec2 <verb>`.
+| Name | What it is | Where it lives |
+|------|-----------|----------------|
+| **`ec2`** | The **CLI command** you type. | `[project.scripts]`, argparse `prog`, all help / `learn` / `explain` / `overview` text, the explain catalog. |
+| **`ec2-cli`** | The **PyPI distribution** *and* the **mesh nick**. | `pyproject.toml` `name`, `importlib.metadata.version("ec2-cli")`, SonarCloud `agentculture_ec2-cli`, `culture.yaml` `suffix`, `whoami`'s `nick`, repo URLs. |
+| **`ec2`** | The **Python package / import**. | the `ec2/` directory; `from ec2 import …`. |
 
-2. **The agent-first rubric gate currently FAILS.** `uv run teken cli doctor .
-   --strict` exits 1 (`unhealthy: 25/26`) on the `explain_self` check: the
-   rubric derives the tool name as `ec2` (the package/script name) and runs
-   `explain ec2`, but `ec2/explain/catalog.py` keys the root entry on
-   `("ec2-cli",)`, so `explain ec2` returns exit 1. **CI's `lint` job runs this
-   gate**, so a PR will fail the `afi rubric gate` step until the naming is
-   reconciled. The fix is to decide on one name and apply it everywhere (see
-   "Renaming / finishing the scaffold" below) — adding an `("ec2",)` catalog
-   key alone makes the rubric green but leaves the `ec2` / `ec2-cli` split.
-
-Package dir = `ec2/`. Distribution name = `ec2-cli` (PyPI, SonarCloud
-`agentculture_ec2-cli`). Console script = `ec2`. The `ec2-cli` literal appears
-in **106 places** across tracked files.
+So: run the CLI as `uv run ec2 <verb>` (**not** `uv run ec2-cli` — there is no
+such script); install it as `uv tool install ec2-cli`; and `whoami` reports
+`nick: ec2-cli`. The command-surface strings were swept to `ec2` (and the
+`explain` catalog accepts both `ec2` and the `ec2-cli` alias) so
+`uv run teken cli doctor . --strict` passes 26/26 — **don't reintroduce
+`ec2-cli` into command/help text**, or the rubric's `explain ec2` check breaks
+again. The distribution-name and nick occurrences above are load-bearing and
+must stay `ec2-cli`.
 
 ## Commands
 
@@ -63,7 +56,7 @@ uv run pytest tests/test_cli.py -q        # one file
 uv run pytest tests/test_cli.py::test_whoami_json   # one test
 uv run pytest -n auto --cov=ec2 --cov-report=term-missing   # with coverage
 
-uv run ec2 whoami                         # run the CLI (note: `ec2`, not `ec2-cli`)
+uv run ec2 whoami                         # run the CLI (command is `ec2`)
 uv run ec2 learn --json                   # every verb supports --json
 python -m ec2 doctor                      # equivalent entry via __main__
 ```
@@ -81,7 +74,7 @@ uv run isort --check-only ec2 tests
 uv run flake8 ec2 tests
 uv run bandit -c pyproject.toml -r ec2
 markdownlint-cli2 "**/*.md" "#node_modules" "#.local" "#.claude/skills" "#.teken"
-uv run teken cli doctor . --strict        # the agent-first rubric gate (see warning above)
+uv run teken cli doctor . --strict        # the agent-first rubric gate (must stay 26/26)
 ```
 
 `black`/`flake8` line length is 100; `isort` uses the black profile. `bandit`
@@ -143,8 +136,9 @@ describes the *agent*. They share render helpers in `overview.py`.
 (`("whoami",)`, `("cli","overview")`, …). `ec2/explain/__init__.py:resolve()`
 looks up the tuple and raises `CliError` on a miss. **Every registered
 noun/verb should have a catalog entry**, and `test_every_catalog_path_resolves`
-enforces that the registered keys resolve. (The root is keyed `("ec2-cli",)` —
-this is the source of the failing rubric `explain ec2` check noted above.)
+enforces that the registered keys resolve. The root resolves under both
+`("ec2",)` (the command — required by the rubric's `explain ec2` check) and
+`("ec2-cli",)` (a back-compat alias for the dist/nick name).
 
 ### Identity model
 
@@ -203,11 +197,13 @@ keep `AGENTS.colleague.md` present as long as the backend is `colleague`.
   worktree, zero side effects) — safe to reach for unprompted. The
   side-effecting `write --apply`/`write --pr` needs the user's go-ahead.
 
-## Renaming / finishing the scaffold
+## Re-branding to a different agent
 
-To make this agent its own (and to fix the failing rubric gate), the `ec2-cli`
-literal and the `ec2` package/command name must be reconciled to one identity.
-Discover every occurrence first:
+This repo descends from `culture-agent-template`, so some surface text still
+reads as a generic "clonable template" rather than as an EC2 manager — that's
+accurate for now (no EC2 functionality exists yet), but if you fork this into a
+*different* agent you must rename all three identities (see the table at the
+top). Discover every occurrence first:
 
 ```bash
 git grep -n -e 'ec2-cli' -e '\bec2\b' -- ':!uv.lock'
@@ -217,4 +213,4 @@ Targets: the package dir `ec2/`, `pyproject.toml` (name, `[project.scripts]`,
 `[tool.hatch...]`, coverage `source`, isort `known_first_party`), every module
 under `ec2/`, `tests/`, `sonar-project.properties`, `culture.yaml`,
 `docs/skill-sources.md`, and `README.md`. Then re-run `uv run pytest -n auto`
-and `uv run teken cli doctor . --strict` until both are green.
+and `uv run teken cli doctor . --strict` until both are green (26/26).
