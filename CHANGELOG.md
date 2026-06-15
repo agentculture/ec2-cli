@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-15
+
+### Added
+
+- ec2 overview — live dashboard: EC2 fleet + EC2-service spend (month-to-date, year-to-date, and forecast end-of-month/year) from Cost Explorer; --json supported.
+- ec2 instance — list instances and start/stop them (confirmation-gated via --yes, idempotent), plus set per-machine spend limits (--monthly/--yearly, optional --auto-stop).
+- ec2 monitor — spend monitoring: one-shot check (exits non-zero on breach) and a self-managed background daemon (start/stop/status via pidfile); run-rate spike projection; alerts to the CULTURE.DEV mesh with an always-on stderr baseline and optional OTEL-log + webhook channels; auto-stop is opt-in per target (alert-only by default).
+- AWS access layer (ec2/aws/) — lazy-imported boto3 with structured CliError mapping for missing boto3/credentials/permissions/region; boto3 ships as an optional [aws] extra so the base install stays dependency-free.
+- Per-machine layered cost estimate (spot vs on-demand rate x running hours + attached EBS), clearly labelled an estimate with documented exclusions (RI/Savings-Plan discounts, data transfer).
+- Local spend-limit config store with idempotent per-target updates.
+
+### Changed
+
+- ec2 overview is now the live cost-and-fleet dashboard; the descriptive agent self-report moved to ec2 cli overview (the teken agent-first rubric stays 26/26). overview degrades to the descriptive report with an AWS-unavailable diagnostic when AWS is not configured.
+
+### Fixed
+
+- Webhook alerter rejects non-http(s) URLs (avoids file:// / custom-scheme opens).
+
 ## [0.3.2] - 2026-06-15
 
 ### Changed
