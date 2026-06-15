@@ -19,6 +19,7 @@ class Instance:
     state: str
     name: str
     az: str
+    lifecycle: str = "on-demand"
 
 
 def _get_name(raw_tags: list[dict[str, str]] | None) -> str:
@@ -64,6 +65,9 @@ def list_instances(client: Any) -> list[Instance]:
                         state=raw.get("State", {}).get("Name", ""),
                         name=_get_name(raw.get("Tags")),
                         az=raw.get("Placement", {}).get("AvailabilityZone", ""),
+                        # InstanceLifecycle is "spot" for spot instances and
+                        # absent for on-demand; default to "on-demand".
+                        lifecycle=raw.get("InstanceLifecycle") or "on-demand",
                     )
                 )
 

@@ -205,3 +205,44 @@ class TestInstanceDataclass:
         d = asdict(inst)
         assert d["id"] == "i-001"
         assert d["type"] == "t3.micro"
+
+
+class TestLifecycle:
+    """list_instances populates Instance.lifecycle from InstanceLifecycle."""
+
+    def test_spot_instance_marked_spot(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mock_boto3 = _mock_boto3(monkeypatch)
+        client = _make_client(mock_boto3)
+        client.describe_instances.return_value = _describe_response(
+            [
+                {
+                    "InstanceId": "i-spot1",
+                    "InstanceType": "t3.micro",
+                    "State": {"Name": "running"},
+                    "Placement": {"AvailabilityZone": "us-east-1a"},
+                    "InstanceLifecycle": "spot",
+                }
+            ]
+        )
+        if "ec2.aws.fleet" in sys.modules:
+            del sys.modules["ec2.aws.fleet"]
+        result = list_instances(client)
+        assert result[0].lifecycle == "spot"
+
+    def test_ondemand_instance_defaults(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mock_boto3 = _mock_boto3(monkeypatch)
+        client = _make_client(mock_boto3)
+        client.describe_instances.return_value = _describe_response(
+            [
+                {
+                    "InstanceId": "i-od1",
+                    "InstanceType": "t3.micro",
+                    "State": {"Name": "running"},
+                    "Placement": {"AvailabilityZone": "us-east-1a"},
+                }
+            ]
+        )
+        if "ec2.aws.fleet" in sys.modules:
+            del sys.modules["ec2.aws.fleet"]
+        result = list_instances(client)
+        assert result[0].lifecycle == "on-demand"
