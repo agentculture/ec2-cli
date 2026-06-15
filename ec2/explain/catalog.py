@@ -23,9 +23,11 @@ buildable/deployable package baseline. Clone it, rename the package, edit
 - `ec2 whoami` — identity probe from `culture.yaml`.
 - `ec2 learn` — structured self-teaching prompt.
 - `ec2 explain <path>` — markdown docs for any noun/verb.
-- `ec2 overview` — descriptive snapshot of the agent.
+- `ec2 overview` — live dashboard: fleet + EC2 cost figures (MTD/YTD/forecast).
+- `ec2 instance` — manage instances (list, start, stop, spend limit).
+- `ec2 monitor` — spend monitoring (check, daemon start/stop/status).
 - `ec2 doctor` — check the agent-identity invariants.
-- `ec2 cli overview` — describe the CLI surface.
+- `ec2 cli overview` — describe the CLI surface (descriptive self-report).
 
 ## Exit-code policy
 
@@ -80,9 +82,9 @@ positional), `explain` is global and addressable by path.
 _OVERVIEW = """\
 # ec2 overview
 
-Read-only descriptive snapshot of the agent: identity (from `culture.yaml`), the
-verb surface, and the sibling-pattern artifacts the template carries. Accepts an
-ignored `target` so a stray path never hard-fails.
+Live dashboard: fleet listing plus four EC2-service cost figures (MTD, YTD,
+end-of-month forecast, end-of-year forecast). Degrades gracefully to the
+descriptive agent overview when AWS is unavailable.
 
 ## Usage
 
@@ -115,6 +117,51 @@ itself (distinct from the global `overview`, which describes the agent).
     ec2 cli overview --json
 """
 
+_INSTANCE = """\
+# ec2 instance
+
+Noun group for EC2 instance management. Lists instances by default; sub-verbs
+handle start, stop, and spend-limit operations. All mutating actions are
+idempotent: if the instance is already in the target state, no AWS call is
+made.
+
+## Sub-commands
+
+- `ec2 instance` — list instances
+- `ec2 instance start <id>` — start an instance (requires `--yes`)
+- `ec2 instance stop <id>` — stop an instance (requires `--yes`)
+- `ec2 instance limit <id> <amount>` — persist a spend limit
+
+## Usage
+
+    ec2 instance
+    ec2 instance start i-0abc123 --yes
+    ec2 instance stop i-0abc123 --yes
+    ec2 instance limit i-0abc123 100 --monthly
+"""
+
+_MONITOR = """\
+# ec2 monitor
+
+Noun group for spend monitoring. Sub-verbs run checks, manage a background
+daemon, and report status.
+
+## Sub-commands
+
+- `ec2 monitor check` — run evaluate once, dispatch alerts, exit non-zero on
+  breach
+- `ec2 monitor start` — start the background daemon loop
+- `ec2 monitor stop` — stop the background daemon
+- `ec2 monitor status` — report daemon running/stopped
+
+## Usage
+
+    ec2 monitor check
+    ec2 monitor start
+    ec2 monitor stop
+    ec2 monitor status
+"""
+
 
 ENTRIES: dict[tuple[str, ...], str] = {
     (): _ROOT,
@@ -129,4 +176,13 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("doctor",): _DOCTOR,
     ("cli",): _CLI,
     ("cli", "overview"): _CLI,
+    ("instance",): _INSTANCE,
+    ("instance", "start"): _INSTANCE,
+    ("instance", "stop"): _INSTANCE,
+    ("instance", "limit"): _INSTANCE,
+    ("monitor",): _MONITOR,
+    ("monitor", "check"): _MONITOR,
+    ("monitor", "start"): _MONITOR,
+    ("monitor", "stop"): _MONITOR,
+    ("monitor", "status"): _MONITOR,
 }
