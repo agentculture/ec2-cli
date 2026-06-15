@@ -61,15 +61,21 @@ def _first_of_year() -> str:
 
 
 def _end_of_month() -> str:
-    """Last day of the current month."""
+    """Exclusive end of the current month (first day of next month).
+
+    Cost Explorer treats the End of a TimePeriod as exclusive, so the first
+    day of the next month is the correct bound to cover the whole month —
+    including December (→ Jan 1 of next year).
+    """
     today = date.today()
     if today.month == 12:
-        return today.replace(month=12, day=31).isoformat()
+        return date(today.year + 1, 1, 1).isoformat()
     return today.replace(month=today.month + 1, day=1).isoformat()
 
 
 def _end_of_year() -> str:
-    return date(date.today().year, 12, 31).isoformat()
+    """Exclusive end of the current year (first day of next year)."""
+    return date(date.today().year + 1, 1, 1).isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +117,7 @@ def _sum_unblended(resp: dict[str, object]) -> float:
     """Sum ``UnblendedCost.Amount`` across all result groups."""
     total = 0.0
     for group in resp.get("ResultsByTime", []):
-        amount = group.get("TotalEstimate", {}).get("UnblendedCost", {}).get("Amount", "0")
+        amount = group.get("Total", {}).get("UnblendedCost", {}).get("Amount", "0")
         total += float(amount)
     return total
 

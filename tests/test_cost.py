@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import date
 from unittest.mock import MagicMock
 
+# Import the date helpers from the module under test (single source of truth)
+# so the assertions validate production's date logic instead of duplicating it.
 from ec2.aws.cost import (
     EC2_FILTER,
+    _end_of_month,
+    _end_of_year,
+    _first_of_month,
+    _first_of_year,
+    _today,
     cost_mtd,
     cost_ytd,
     forecast_month,
@@ -17,30 +23,6 @@ from ec2.aws.cost import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _today() -> str:
-    return date.today().isoformat()
-
-
-def _first_of_month() -> str:
-    return date.today().replace(day=1).isoformat()
-
-
-def _first_of_year() -> str:
-    return date.today().replace(month=1, day=1).isoformat()
-
-
-def _end_of_month() -> str:
-    """Last day of the current month."""
-    today = date.today()
-    if today.month == 12:
-        return today.replace(month=12, day=31).isoformat()
-    return today.replace(month=today.month + 1, day=1).isoformat()
-
-
-def _end_of_year() -> str:
-    return date(date.today().year, 12, 31).isoformat()
 
 
 def _mock_client() -> MagicMock:
@@ -71,9 +53,7 @@ class TestCostMtd:
     def test_calls_get_cost_and_usage(self) -> None:
         client = _mock_client()
         client.get_cost_and_usage.return_value = {
-            "ResultsByTime": [
-                {"TotalEstimate": {"UnblendedCost": {"Amount": "10.00", "Unit": "USD"}}}
-            ]
+            "ResultsByTime": [{"Total": {"UnblendedCost": {"Amount": "10.00", "Unit": "USD"}}}]
         }
 
         result = cost_mtd(client)
@@ -90,8 +70,8 @@ class TestCostMtd:
         client = _mock_client()
         client.get_cost_and_usage.return_value = {
             "ResultsByTime": [
-                {"TotalEstimate": {"UnblendedCost": {"Amount": "5.00", "Unit": "USD"}}},
-                {"TotalEstimate": {"UnblendedCost": {"Amount": "3.50", "Unit": "USD"}}},
+                {"Total": {"UnblendedCost": {"Amount": "5.00", "Unit": "USD"}}},
+                {"Total": {"UnblendedCost": {"Amount": "3.50", "Unit": "USD"}}},
             ]
         }
 
@@ -103,9 +83,7 @@ class TestCostYtd:
     def test_calls_get_cost_and_usage(self) -> None:
         client = _mock_client()
         client.get_cost_and_usage.return_value = {
-            "ResultsByTime": [
-                {"TotalEstimate": {"UnblendedCost": {"Amount": "100.00", "Unit": "USD"}}}
-            ]
+            "ResultsByTime": [{"Total": {"UnblendedCost": {"Amount": "100.00", "Unit": "USD"}}}]
         }
 
         result = cost_ytd(client)
