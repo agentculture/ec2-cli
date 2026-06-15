@@ -1,28 +1,220 @@
-# CLAUDE.md — seed / bootstrap placeholder
+# CLAUDE.md
 
-> **This is a self-initializing seed, not a finished runtime prompt.**
-> Run `/init` (or describe the agent's domain to your AI assistant) to
-> re-initialize this file into a full runtime prompt, using the description
-> below and the scaffolded repo as context.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Agent
+## What this repo is
 
-This repository hosts the **ec2-cli** agent.
+`ec2-cli` is an **AgentCulture mesh agent**, freshly scaffolded from
+`culture-agent-template` (see `git log` — `scaffold ec2-cli from
+culture-agent-template`). Its **intended domain** is managing AWS EC2 instances
+(launch, inspect, start/stop, operate fleets), per `pyproject.toml`'s
+description and the README.
 
-## Description
+**That domain is not implemented yet.** The runtime has `dependencies = []`
+(no `boto3`, no AWS SDK) and the only code present is the *template's*
+agent-first introspection CLI: `whoami`, `learn`, `explain`, `overview`,
+`doctor`, and a `cli` noun group. When you add EC2 functionality you are
+building the actual agent on top of this scaffold — the template machinery
+(error contract, output contract, explain catalog, identity probe) is the
+reusable substrate, not the product.
 
-Agent and CLI for managing AWS EC2 machines (instances) — launch, inspect, start/stop, and operate fleets.
+**This agent is public.** Most AgentCulture mesh agents are private peers; this
+one is meant to serve everyone. The bar is therefore *general AWS-client
+usability*, not just mesh-internal use — every EC2 verb you add should be
+ergonomic and discoverable for an outside AWS user, not only for another agent.
+The agent-first contracts (`--json` everywhere, structured errors with `hint:`,
+the `explain`/`learn` self-description surface) are exactly what make the CLI
+usable to both audiences at once; keep extending them as the surface grows.
 
-## Re-init instruction
+## ⚠️ The naming is half-renamed — read this first
 
-This file is a seed. To expand it into your full runtime prompt:
+The scaffold rename from the template name to `ec2`/`ec2-cli` was **not
+completed**, and two things follow that will bite you:
 
-1. Open this repo in Claude Code (or your preferred AI assistant).
-2. Run `/init` — the assistant will read the repo, incorporate the description
-   above, and replace this seed with a complete `CLAUDE.md`.
-3. Commit the result.
+1. **The installed command is `ec2`, NOT `ec2-cli`.** `pyproject.toml`'s
+   `[project.scripts]` defines `ec2 = "ec2.cli:main"`. `uv run ec2-cli …`
+   fails ("No such file or directory"). The README quickstart, `learn` output,
+   the `explain` catalog, and the argparse `prog` string all *say* `ec2-cli` —
+   that text is the unfinished rename, not the real binary. Run the CLI as
+   `uv run ec2 <verb>` or `python -m ec2 <verb>`.
 
-Until you run `/init`, `ec2-cli` satisfies the `steward doctor`
-`prompt-file-present` and `backend-consistency` invariants (a `CLAUDE.md`
-exists and `culture.yaml` declares `backend: claude`) but the prompt is not
-yet tailored to this agent's domain.
+2. **The agent-first rubric gate currently FAILS.** `uv run teken cli doctor .
+   --strict` exits 1 (`unhealthy: 25/26`) on the `explain_self` check: the
+   rubric derives the tool name as `ec2` (the package/script name) and runs
+   `explain ec2`, but `ec2/explain/catalog.py` keys the root entry on
+   `("ec2-cli",)`, so `explain ec2` returns exit 1. **CI's `lint` job runs this
+   gate**, so a PR will fail the `afi rubric gate` step until the naming is
+   reconciled. The fix is to decide on one name and apply it everywhere (see
+   "Renaming / finishing the scaffold" below) — adding an `("ec2",)` catalog
+   key alone makes the rubric green but leaves the `ec2` / `ec2-cli` split.
+
+Package dir = `ec2/`. Distribution name = `ec2-cli` (PyPI, SonarCloud
+`agentculture_ec2-cli`). Console script = `ec2`. The `ec2-cli` literal appears
+in **106 places** across tracked files.
+
+## Commands
+
+All Python work uses **uv** (Python 3.12, hatchling build backend).
+
+```bash
+uv sync                                   # create .venv, install runtime + dev deps
+uv run pytest -n auto                     # full suite (xdist parallel)
+uv run pytest tests/test_cli.py -q        # one file
+uv run pytest tests/test_cli.py::test_whoami_json   # one test
+uv run pytest -n auto --cov=ec2 --cov-report=term-missing   # with coverage
+
+uv run ec2 whoami                         # run the CLI (note: `ec2`, not `ec2-cli`)
+uv run ec2 learn --json                   # every verb supports --json
+python -m ec2 doctor                      # equivalent entry via __main__
+```
+
+Coverage gate: `fail_under = 60` (`[tool.coverage.report]`); the suite sits
+~93%. CI writes `coverage.xml` with `relative_files = true` so SonarCloud maps
+paths to `sonar.sources=ec2` — do not remove that flag or Sonar silently
+reports 0% coverage.
+
+### Lint (mirror CI's `lint` job before pushing)
+
+```bash
+uv run black --check ec2 tests
+uv run isort --check-only ec2 tests
+uv run flake8 ec2 tests
+uv run bandit -c pyproject.toml -r ec2
+markdownlint-cli2 "**/*.md" "#node_modules" "#.local" "#.claude/skills" "#.teken"
+uv run teken cli doctor . --strict        # the agent-first rubric gate (see warning above)
+```
+
+`black`/`flake8` line length is 100; `isort` uses the black profile. `bandit`
+skips `B101,B404,B603` and excludes `tests`.
+
+## Architecture
+
+Single-package CLI under `ec2/`. The whole design serves the **agent-first
+rubric** (`teken cli doctor`): output is machine-parseable, errors are
+structured, and the CLI is self-describing.
+
+### Dispatch and the error contract
+
+`ec2/cli/__init__.py` is the entry point. `main(argv)` → `_build_parser()` →
+`_dispatch(args)`. Two hard rules run through here:
+
+- **Every failure raises `CliError`** (`ec2/cli/_errors.py`), carrying
+  `{code, message, remediation}`. `_dispatch` catches `CliError`, routes it
+  through `emit_error`, and returns `err.code`. Any *other* exception is
+  wrapped into a `CliError` so **no Python traceback ever reaches stderr**
+  (a rubric requirement).
+- **Argparse errors also use the structured format.** `_CliArgumentParser`
+  overrides `.error()` to emit `error:` / `hint:` and exit 1 instead of
+  argparse's default `prog: error:` / exit 2. `parser_class` is propagated to
+  every subparser so this holds for nested verbs too (e.g. `cli overview
+  --bogus`). Because parse-time errors happen before `args.json` exists,
+  `main()` pre-scans raw argv for `--json` and sets the class-level
+  `_json_hint` so even parse errors honour JSON mode.
+
+Exit-code policy (centralised in `_errors.py`, documented in `learn`):
+`0` success · `1` user-input error · `2` environment/setup error · `3+`
+reserved.
+
+### Output contract
+
+`ec2/cli/_output.py`: **results → stdout, diagnostics/errors → stderr, never
+mixed.** `emit_result` (stdout), `emit_error` (stderr; renders `error:` +
+`hint:` lines, the `hint:` prefix is rubric-required), `emit_diagnostic`
+(stderr). JSON mode routes structured payloads to the same streams. Honour this
+split in any new command — tests and the rubric assert `stderr` is empty on
+success.
+
+### Commands and registration
+
+Each verb is a module in `ec2/cli/_commands/` exposing a `register(sub)`
+function and a `cmd_*` handler that takes `argparse.Namespace` and returns an
+`int` (or `None` = 0). `_build_parser()` calls each `register()`. To add a verb
+or noun group, write the module, then add its `register()` call in
+`_build_parser()` (there's a marked spot for "your own noun groups").
+
+The `cli` noun (`_commands/cli.py`) exists only to satisfy the rubric's
+`overview_cli_noun_exists` check: any noun with action-verbs must expose
+`overview`. `cli overview` describes the *CLI surface*; the global `overview`
+describes the *agent*. They share render helpers in `overview.py`.
+
+### Explain catalog
+
+`ec2/explain/catalog.py` holds verbatim markdown keyed by command-path tuples
+(`("whoami",)`, `("cli","overview")`, …). `ec2/explain/__init__.py:resolve()`
+looks up the tuple and raises `CliError` on a miss. **Every registered
+noun/verb should have a catalog entry**, and `test_every_catalog_path_resolves`
+enforces that the registered keys resolve. (The root is keyed `("ec2-cli",)` —
+this is the source of the failing rubric `explain ec2` check noted above.)
+
+### Identity model
+
+`ec2/cli/_commands/whoami.py` parses `culture.yaml` **without a YAML
+dependency** (the runtime must stay dependency-free): `find_culture_yaml()`
+walks up from `__file__` to find the agent's *own* config (not the caller's
+CWD), and `read_agent_fields()` scrapes `suffix`/`backend`/`model` from the
+first agent block via simple line matching. In a wheel install no
+`culture.yaml` ships, so it falls back to literal defaults. `whoami`,
+`overview`, and `doctor` all build on this.
+
+`doctor` (`_commands/doctor.py`) checks the mesh-agent invariants `steward
+doctor` verifies: **backend-consistency** (`culture.yaml`'s `backend` →
+required prompt file, via `_PROMPT_FILE`: `claude`→`CLAUDE.md`,
+`colleague`→`AGENTS.colleague.md`, `acp`→`AGENTS.md`, `gemini`→`GEMINI.md`)
+and **skills-present** (`.claude/skills/` non-empty). If you change
+`culture.yaml`'s backend, update `_PROMPT_FILE` and ship the matching prompt
+file or `doctor` (and the rubric) go red — `test_doctor_recognizes_declared_backend`
+guards exactly this.
+
+### Identity files (two backends, two prompt files)
+
+`culture.yaml` currently declares `backend: colleague` with a pinned model and
+the prompt file `AGENTS.colleague.md` (the agent was promoted from `claude` to
+a colleague resident in 0.3.0 — the seed text claiming `backend: claude` is
+stale). **This `CLAUDE.md` is the prompt for Claude Code (you);
+`AGENTS.colleague.md` is the prompt for the colleague resident.** Both coexist
+deliberately. `doctor` validates against whatever `culture.yaml` declares, so
+keep `AGENTS.colleague.md` present as long as the backend is `colleague`.
+
+## AgentCulture conventions (enforced by CI)
+
+- **Bump the version on every PR — even docs/config/CI-only changes.** The
+  `version-check` CI job fails the PR if `pyproject.toml`'s version equals
+  `main`'s. Use the `version-bump` skill (`/version-bump patch|minor|major`),
+  which also prepends a Keep-a-Changelog entry to `CHANGELOG.md`.
+- **PR lifecycle goes through the `cicd` skill** (layered on `devex pr`):
+  create PRs, poll CI/SonarCloud status (`status`/`await`), and reply to review
+  threads. Issue comments and PR bodies auto-sign as `- ec2-cli (Claude)` via
+  the skill scripts — don't hand-sign inside `cicd`/`communicate` script output.
+- **SonarCloud gates the `test` job** (`sonar.qualitygate.wait=true`,
+  project key `agentculture_ec2-cli`). The scan step is guarded by
+  `if: env.SONAR_TOKEN != ''`, so token-less repos and fork PRs stay green.
+- **PyPI publish is Trusted Publishing** (`publish.yml`): TestPyPI dev builds
+  on same-repo PRs, real PyPI on push to `main`. Triggered only by changes to
+  `pyproject.toml` or `ec2/**`.
+- **Skills are cite-don't-import.** The 12 skills under `.claude/skills/` are
+  vendored verbatim from `guildmaster` (one, `ask-colleague`, directly from
+  `colleague`). Provenance and the re-sync procedure live in
+  `docs/skill-sources.md` — edit there, don't hand-patch skill bodies. Every
+  `SKILL.md` must keep `type: command` (load-bearing; the loader skips files
+  without it).
+- **`ask-colleague` is the reflexive second-opinion tool.** Before opening a PR
+  on a non-trivial committed diff, run `ask-colleague review`; for a fresh read
+  of an unfamiliar area, `ask-colleague explore`. Both are read-only (throwaway
+  worktree, zero side effects) — safe to reach for unprompted. The
+  side-effecting `write --apply`/`write --pr` needs the user's go-ahead.
+
+## Renaming / finishing the scaffold
+
+To make this agent its own (and to fix the failing rubric gate), the `ec2-cli`
+literal and the `ec2` package/command name must be reconciled to one identity.
+Discover every occurrence first:
+
+```bash
+git grep -n -e 'ec2-cli' -e '\bec2\b' -- ':!uv.lock'
+```
+
+Targets: the package dir `ec2/`, `pyproject.toml` (name, `[project.scripts]`,
+`[tool.hatch...]`, coverage `source`, isort `known_first_party`), every module
+under `ec2/`, `tests/`, `sonar-project.properties`, `culture.yaml`,
+`docs/skill-sources.md`, and `README.md`. Then re-run `uv run pytest -n auto`
+and `uv run teken cli doctor . --strict` until both are green.

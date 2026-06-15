@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/). This project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-06-15
+
+### Changed
+
+- Replace the seed CLAUDE.md placeholder with a full runtime prompt (via /init): documents the real entry-point command (ec2, not ec2-cli), the half-finished rename and the resulting failing teken rubric gate (explain ec2), the dispatch/error/output/explain/identity architecture, and the AgentCulture CI conventions.
+- Record the public-facing positioning in CLAUDE.md: ec2-cli is a public agent, so the bar is general AWS-client CLI usability, not just mesh-internal use.
+
+### Fixed
+
+- uv.lock version was stale (0.2.1); resynced to the current project version.
+
 ## [0.3.1] - 2026-06-13
 
 ### Changed
