@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from ec2.cli._errors import EXIT_ENV_ERROR, CliError
+
 
 @dataclass
 class Limit:
@@ -105,7 +107,18 @@ def _read_raw(path: Path) -> list[dict[str, Any]]:
 
 
 def _write_raw(path: Path, data: list[dict[str, Any]]) -> None:
-    """Write *data* as a JSON array to *path*."""
+    """Write *data* as a JSON array to *path*.
+
+    Guards the write sink: the destination must be our own limits file
+    (``<config>/ec2-cli/limits.json``), never an attacker-steered path
+    (path-injection defense, SonarCloud S2083).
+    """
+    if path.name != "limits.json" or path.parent.name != "ec2-cli":
+        raise CliError(
+            code=EXIT_ENV_ERROR,
+            message="refusing to write the limits file to an unexpected path",
+            remediation="the limits file must be <config>/ec2-cli/limits.json",
+        )
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
