@@ -85,8 +85,9 @@ def _is_no_credentials(exc: Exception) -> bool:
 
 
 def _is_access_denied(exc: Exception) -> bool:
-    # botocore.exceptions.ClientError carries .response_error with the code.
-    resp = getattr(exc, "response_error", None)
+    # botocore.exceptions.ClientError carries the error dict on .response
+    # (shape: {"Error": {"Code": ...}}), NOT .response_error.
+    resp = getattr(exc, "response", None)
     if isinstance(resp, dict):
         error = resp.get("Error", {})
         if isinstance(error, dict):

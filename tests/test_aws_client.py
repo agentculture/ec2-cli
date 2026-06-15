@@ -116,7 +116,7 @@ class TestBuildClient:
 
         class ClientError(Exception):
             def __init__(self, resp):
-                self.response_error = resp
+                self.response = resp
                 self.operation_name = "DescribeInstances"
 
         mock_boto3.client.side_effect = ClientError(error_response)
