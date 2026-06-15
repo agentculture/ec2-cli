@@ -23,6 +23,9 @@ from ec2.monitor.evaluate import Finding
 Sender = Callable[[dict[str, Any]], None]
 WebhookSender = Callable[[str, dict[str, Any]], None]
 
+# The native mesh channel name.
+_CHANNEL_CULTURE_DEV = "culture.dev"
+
 
 # -- default CULTURE.DEV sender (degrades gracefully) ----------------------
 
@@ -69,7 +72,7 @@ def _dispatch_culture_dev(
     senders: dict[str, Sender] | None,
 ) -> None:
     """Route alert to CULTURE.DEV mesh via the injected sender."""
-    sender = (senders or {}).get("culture.dev", _default_culture_dev_sender)
+    sender = (senders or {}).get(_CHANNEL_CULTURE_DEV, _default_culture_dev_sender)
     sender(alert)
 
 
@@ -164,7 +167,7 @@ def dispatch(
         Optional per-channel configuration (e.g. webhook URL).
     """
     if channels is None:
-        channels = ["culture.dev"]
+        channels = [_CHANNEL_CULTURE_DEV]
 
     for finding in findings:
         alert = _build_alert(finding)
@@ -173,7 +176,7 @@ def dispatch(
         _dispatch_stderr(alert)
 
         for channel in channels:
-            if channel == "culture.dev":
+            if channel == _CHANNEL_CULTURE_DEV:
                 _dispatch_culture_dev(alert, senders)
             elif channel == "otel":
                 _dispatch_otel(alert)

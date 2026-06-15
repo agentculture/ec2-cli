@@ -22,6 +22,8 @@ from typing import Any
 from ec2.cli._errors import EXIT_USER_ERROR, CliError
 from ec2.cli._output import emit_diagnostic, emit_result
 
+_INSTANCE_ID_HELP = "Instance ID (e.g. i-0abc123)."
+
 
 def _get_client(args: argparse.Namespace) -> Any:
     """Return the EC2 client from *args* or build one lazily.
@@ -170,19 +172,19 @@ def register(sub: argparse._SubParsersAction) -> None:
 
     # -- start ----------------------------------------------------------------
     p_start = sub_verb.add_parser("start", help="Start an instance.")
-    p_start.add_argument("instance_id", help="Instance ID (e.g. i-0abc123).")
+    p_start.add_argument("instance_id", help=_INSTANCE_ID_HELP)
     p_start.add_argument("--yes", action="store_true", help="Skip confirmation prompt.")
     p_start.set_defaults(func=cmd_instance_start, yes=False)
 
     # -- stop -----------------------------------------------------------------
     p_stop = sub_verb.add_parser("stop", help="Stop an instance.")
-    p_stop.add_argument("instance_id", help="Instance ID (e.g. i-0abc123).")
+    p_stop.add_argument("instance_id", help=_INSTANCE_ID_HELP)
     p_stop.add_argument("--yes", action="store_true", help="Skip confirmation prompt.")
     p_stop.set_defaults(func=cmd_instance_stop, yes=False)
 
     # -- limit ----------------------------------------------------------------
     p_limit = sub_verb.add_parser("limit", help="Set a spend limit for an instance.")
-    p_limit.add_argument("instance_id", help="Instance ID (e.g. i-0abc123).")
+    p_limit.add_argument("instance_id", help=_INSTANCE_ID_HELP)
     p_limit.add_argument("amount", type=float, help="Dollar amount.")
     p_limit.add_argument("--monthly", action="store_true", help="Monthly billing period.")
     p_limit.add_argument("--yearly", action="store_true", help="Yearly billing period.")

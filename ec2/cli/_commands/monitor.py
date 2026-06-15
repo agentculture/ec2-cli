@@ -22,6 +22,14 @@ from ec2.monitor.daemon import status as daemon_status
 from ec2.monitor.daemon import stop as daemon_stop
 from ec2.monitor.evaluate import evaluate
 
+# Default PID file lives under the user's private XDG state dir (mode-700 home),
+# not a world-writable /tmp, to avoid pidfile spoofing in a shared environment.
+_DEFAULT_PIDFILE = Path.home() / ".local" / "state" / "ec2-cli" / "monitor.pid"
+_PIDFILE_HELP = (
+    "PID file path (default: ~/.local/state/ec2-cli/monitor.pid, "
+    "override with EC2_MONITOR_PIDFILE)."
+)
+
 
 def _get_interval(args: argparse.Namespace) -> float:
     """Return the monitor interval from args or environment, default 300 s."""
@@ -47,7 +55,7 @@ def _get_pidfile(args: argparse.Namespace) -> Path:
     env_path = environ.get("EC2_MONITOR_PIDFILE")
     if env_path:
         return Path(env_path)
-    return Path("/tmp/ec2-monitor.pid")  # nosec B108
+    return _DEFAULT_PIDFILE
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -154,7 +162,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     p_start.add_argument(
         "--pidfile",
         default=None,
-        help="PID file path (default: /tmp/ec2-monitor.pid, override with EC2_MONITOR_PIDFILE).",
+        help=_PIDFILE_HELP,
     )
     p_start.set_defaults(func=cmd_start, interval=None, pidfile=None)
 
@@ -163,7 +171,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     p_stop.add_argument(
         "--pidfile",
         default=None,
-        help="PID file path (default: /tmp/ec2-monitor.pid, override with EC2_MONITOR_PIDFILE).",
+        help=_PIDFILE_HELP,
     )
     p_stop.set_defaults(func=cmd_stop, pidfile=None)
 
@@ -173,6 +181,6 @@ def register(sub: argparse._SubParsersAction) -> None:
     p_status.add_argument(
         "--pidfile",
         default=None,
-        help="PID file path (default: /tmp/ec2-monitor.pid, override with EC2_MONITOR_PIDFILE).",
+        help=_PIDFILE_HELP,
     )
     p_status.set_defaults(func=cmd_status, json=False, pidfile=None)

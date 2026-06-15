@@ -1,9 +1,8 @@
 """Spend-limit config store (stdlib only).
 
-Persists :class:`Limit` objects to a local JSON file under the XDG config
-directory (``~/.config/ec2-cli/limits.json`` by default, honouring
-``$XDG_CONFIG_HOME``).  Uses only :mod:`json`, :mod:`pathlib`, and
-:dataclass:`dataclasses`.
+Persists :class:`Limit` objects to a local JSON file at
+``~/.config/ec2-cli/limits.json``.  Uses only :mod:`json`, :mod:`pathlib`,
+and :dataclass:`dataclasses`.
 """
 
 from __future__ import annotations
@@ -25,18 +24,15 @@ class Limit:
 
 
 def _config_dir(config_dir: Path | None = None) -> Path:
-    """Return the XDG config directory for ec2-cli.
+    """Return the config directory for ec2-cli (``~/.config`` by default).
 
-    Honours ``$XDG_CONFIG_HOME`` when set; falls back to ``~/.config``.
-    When *config_dir* is provided (e.g. in tests), it is used directly.
+    When *config_dir* is provided (e.g. in tests), it is used directly. The
+    path is intentionally derived from ``Path.home()`` and fixed literals (not
+    from environment variables) so the write target can't be steered by
+    user-controlled input.
     """
     if config_dir is not None:
         return config_dir
-    from os import environ
-
-    xdg = environ.get("XDG_CONFIG_HOME")
-    if xdg:
-        return Path(xdg)
     return Path.home() / ".config"
 
 
