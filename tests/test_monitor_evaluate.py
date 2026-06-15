@@ -14,12 +14,12 @@ Acceptance criteria:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
 from ec2.limits import Limit
-from ec2.monitor.evaluate import Finding, evaluate
+from ec2.monitor.evaluate import evaluate
 
 # ---------------------------------------------------------------------------
 # Fixtures
