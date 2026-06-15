@@ -206,7 +206,9 @@ accurate for now (no EC2 functionality exists yet), but if you fork this into a
 top). Discover every occurrence first:
 
 ```bash
-git grep -n -e 'ec2-cli' -e '\bec2\b' -- ':!uv.lock'
+# -w (whole-word) is portable; `git grep` does NOT treat `\b` as a word
+# boundary unless you pass -P (PCRE). This matches `ec2`, `ec2-cli`, `ec2.cli`.
+git grep -nw ec2 -- ':!uv.lock'
 ```
 
 Targets: the package dir `ec2/`, `pyproject.toml` (name, `[project.scripts]`,
