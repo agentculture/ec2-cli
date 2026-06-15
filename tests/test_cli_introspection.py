@@ -3,33 +3,71 @@
 from __future__ import annotations
 
 import json
+import sys
+from unittest.mock import MagicMock
 
 import pytest
 
 from ec2.cli import main
 
+
+def _mock_boto3(monkeypatch: pytest.MonkeyPatch):
+    mock_boto3 = MagicMock()
+    monkeypatch.setitem(sys.modules, "boto3", mock_boto3)
+    return mock_boto3
+
+
+def _setup_overview_mocks(monkeypatch: pytest.MonkeyPatch):
+    """Set up mocked boto3 for ``ec2 overview`` dashboard calls."""
+    mock_boto3 = _mock_boto3(monkeypatch)
+    ec2_client = MagicMock()
+    ce_client = MagicMock()
+
+    def _client_factory(service, region_name=None):
+        if service == "ec2":
+            return ec2_client
+        if service == "ce":
+            return ce_client
+        return MagicMock()
+
+    mock_boto3.client.side_effect = _client_factory
+
+    ec2_client.describe_instances.return_value = {"Reservations": []}
+    ce_client.get_cost_and_usage.return_value = {"ResultsByTime": []}
+    ce_client.get_cost_forecast.return_value = {"ForecastResults": []}
+
+    for mod in list(sys.modules.keys()):
+        if mod.startswith("ec2.aws"):
+            del sys.modules[mod]
+
+
 # --- overview -------------------------------------------------------------
 
 
-def test_overview_text(capsys: pytest.CaptureFixture[str]) -> None:
+def test_overview_text(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    _setup_overview_mocks(monkeypatch)
     rc = main(["overview"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "# ec2" in out
-    assert "Identity" in out
+    assert "# ec2 dashboard" in out
 
 
-def test_overview_json_shape(capsys: pytest.CaptureFixture[str]) -> None:
+def test_overview_json_shape(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _setup_overview_mocks(monkeypatch)
     rc = main(["overview", "--json"])
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["subject"] == "ec2"
-    assert isinstance(payload["sections"], list)
-    assert payload["sections"]
+    assert "fleet" in payload
+    assert "cost" in payload
 
 
-def test_overview_graceful_on_bad_path(capsys: pytest.CaptureFixture[str]) -> None:
+def test_overview_graceful_on_bad_path(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     # Rubric contract: descriptive verbs never hard-fail on a missing target.
+    _setup_overview_mocks(monkeypatch)
     rc = main(["overview", "/no/such/path/here"])
     assert rc == 0
     assert capsys.readouterr().out.strip()
