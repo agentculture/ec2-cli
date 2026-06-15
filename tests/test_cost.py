@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 # Import the date helpers from the module under test (single source of truth)
 # so the assertions validate production's date logic instead of duplicating it.
 from ec2.aws.cost import (
@@ -13,12 +15,14 @@ from ec2.aws.cost import (
     _first_of_month,
     _first_of_year,
     _today,
+    _tomorrow,
     cost_mtd,
     cost_ytd,
     forecast_month,
     forecast_unavailable,
     forecast_year,
 )
+from ec2.cli._errors import CliError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -59,7 +63,7 @@ class TestCostMtd:
         result = cost_mtd(client)
 
         client.get_cost_and_usage.assert_called_once_with(
-            TimePeriod={"Start": _first_of_month(), "End": _today()},
+            TimePeriod={"Start": _first_of_month(), "End": _tomorrow()},
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
             Filter=EC2_FILTER,
@@ -89,7 +93,7 @@ class TestCostYtd:
         result = cost_ytd(client)
 
         client.get_cost_and_usage.assert_called_once_with(
-            TimePeriod={"Start": _first_of_year(), "End": _today()},
+            TimePeriod={"Start": _first_of_year(), "End": _tomorrow()},
             Granularity="MONTHLY",
             Metrics=["UnblendedCost"],
             Filter=EC2_FILTER,
@@ -194,3 +198,28 @@ class TestForecastUnavailable:
         sentinel = forecast_unavailable()
         assert sentinel["available"] is False
         assert "amount" not in sentinel or sentinel.get("amount") is None
+
+
+class TestCostErrorMapping:
+    """API-call errors (not just client creation) map to CliError code 2."""
+
+    def test_accessdenied_during_get_cost_and_usage(self) -> None:
+        client = _mock_client()
+
+        class ClientError(Exception):
+            def __init__(self) -> None:
+                self.response = {"Error": {"Code": "AccessDenied"}}
+
+        client.get_cost_and_usage.side_effect = ClientError()
+
+        with pytest.raises(CliError) as exc:
+            cost_mtd(client)
+        assert exc.value.code == 2
+
+    def test_generic_api_error_during_forecast_maps_to_clierror(self) -> None:
+        client = _mock_client()
+        client.get_cost_forecast.side_effect = RuntimeError("throttled")
+
+        with pytest.raises(CliError) as exc:
+            forecast_month(client)
+        assert exc.value.code == 2

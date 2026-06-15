@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ec2.aws.client import aws_call
+
 
 @dataclass
 class Instance:
@@ -54,7 +56,7 @@ def list_instances(client: Any) -> list[Instance]:
         if next_token:
             kwargs["NextToken"] = next_token
 
-        resp = client.describe_instances(**kwargs)
+        resp = aws_call(client.describe_instances, **kwargs)
 
         for reservation in resp.get("Reservations", []):
             for raw in reservation.get("Instances", []):

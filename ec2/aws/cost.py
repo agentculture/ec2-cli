@@ -16,7 +16,9 @@ To include EC2-Other charges (e.g. EBS, NAT Gateway), append
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
+
+from ec2.aws.client import aws_call, map_aws_error
 
 # ---------------------------------------------------------------------------
 # EC2-service filter
@@ -50,6 +52,12 @@ def forecast_unavailable() -> dict[str, object]:
 
 def _today() -> str:
     return date.today().isoformat()
+
+
+def _tomorrow() -> str:
+    # Cost Explorer TimePeriod.End is EXCLUSIVE, so to include today's spend in
+    # an MTD/YTD total the end bound must be tomorrow.
+    return (date.today() + timedelta(days=1)).isoformat()
 
 
 def _first_of_month() -> str:
@@ -87,10 +95,12 @@ def cost_mtd(client: object) -> float:
     """Return EC2 spend for the current month (USD).
 
     Calls ``GetCostAndUsage`` with ``UnblendedCost``, monthly granularity,
-    and the EC2-service filter for *first-of-month .. today*.
+    and the EC2-service filter for *first-of-month .. tomorrow* (End is
+    exclusive, so tomorrow includes today's spend).
     """
-    resp = client.get_cost_and_usage(
-        TimePeriod={"Start": _first_of_month(), "End": _today()},
+    resp = aws_call(
+        client.get_cost_and_usage,
+        TimePeriod={"Start": _first_of_month(), "End": _tomorrow()},
         Granularity="MONTHLY",
         Metrics=["UnblendedCost"],
         Filter=EC2_FILTER,
@@ -102,10 +112,12 @@ def cost_ytd(client: object) -> float:
     """Return EC2 spend year-to-date (USD).
 
     Calls ``GetCostAndUsage`` with ``UnblendedCost``, monthly granularity,
-    and the EC2-service filter for *first-of-year .. today*.
+    and the EC2-service filter for *first-of-year .. tomorrow* (End is
+    exclusive, so tomorrow includes today's spend).
     """
-    resp = client.get_cost_and_usage(
-        TimePeriod={"Start": _first_of_year(), "End": _today()},
+    resp = aws_call(
+        client.get_cost_and_usage,
+        TimePeriod={"Start": _first_of_year(), "End": _tomorrow()},
         Granularity="MONTHLY",
         Metrics=["UnblendedCost"],
         Filter=EC2_FILTER,
@@ -146,7 +158,7 @@ def forecast_month(client: object) -> dict[str, object]:
     except Exception as exc:
         if _is_ce_unavailable(exc):
             return forecast_unavailable()
-        raise
+        raise map_aws_error(exc)
 
 
 def forecast_year(client: object) -> dict[str, object]:
@@ -168,7 +180,7 @@ def forecast_year(client: object) -> dict[str, object]:
     except Exception as exc:
         if _is_ce_unavailable(exc):
             return forecast_unavailable()
-        raise
+        raise map_aws_error(exc)
 
 
 def _forecast_amount(resp: dict[str, object]) -> float:

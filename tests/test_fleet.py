@@ -246,3 +246,27 @@ class TestLifecycle:
             del sys.modules["ec2.aws.fleet"]
         result = list_instances(client)
         assert result[0].lifecycle == "on-demand"
+
+
+class TestFleetErrorMapping:
+    """describe_instances API errors map to CliError code 2."""
+
+    def test_accessdenied_during_describe_instances(
+        self, monkeypatch: "pytest.MonkeyPatch"
+    ) -> None:
+        from ec2.cli._errors import CliError
+
+        mock_boto3 = _mock_boto3(monkeypatch)
+        client = _make_client(mock_boto3)
+
+        class ClientError(Exception):
+            def __init__(self) -> None:
+                self.response = {"Error": {"Code": "AccessDenied"}}
+
+        client.describe_instances.side_effect = ClientError()
+        if "ec2.aws.fleet" in sys.modules:
+            del sys.modules["ec2.aws.fleet"]
+
+        with pytest.raises(CliError) as exc:
+            list_instances(client)
+        assert exc.value.code == 2

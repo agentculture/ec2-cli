@@ -35,10 +35,26 @@ def build_client(service: str, region: str | None = None):
     try:
         return boto3.client(service, region_name=region)
     except Exception as exc:
-        raise _map_aws_error(exc)
+        raise map_aws_error(exc)
 
 
-def _map_aws_error(exc: Exception) -> CliError:
+def aws_call(method, *args, **kwargs):
+    """Invoke an AWS client *method*, mapping any failure to :class:`CliError`.
+
+    All AWS API calls should go through this so errors raised *during a request*
+    (AccessDenied, throttling, network) surface as structured CliErrors (code 2
+    with a hint) — matching the env-error contract — rather than leaking as a
+    generic ``unexpected: ...`` (code 1) from the top-level dispatcher.
+    """
+    try:
+        return method(*args, **kwargs)
+    except CliError:
+        raise
+    except Exception as exc:
+        raise map_aws_error(exc)
+
+
+def map_aws_error(exc: Exception) -> CliError:
     """Translate a boto3 / botocore exception into :class:`CliError`."""
 
     # Missing credentials
