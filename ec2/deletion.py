@@ -60,6 +60,9 @@ def fresh_review(
     rec = _read(_reviews_file(config_dir)).get(instance_id)
     if not isinstance(rec, dict):
         return None
+    # `>` (not `>=`): a review at exactly the TTL boundary is still valid; the
+    # window closes strictly *after* ttl seconds. A missing/corrupt `at` -> 0,
+    # which makes `stamp - 0 > ttl` true -> treated as expired (conservative).
     if stamp - float(rec.get("at", 0)) > ttl:
         return None
     return rec

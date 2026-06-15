@@ -170,3 +170,10 @@ class TestDeletionStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{ not json", encoding="utf-8")
         assert deletion.fresh_review(IID, config_dir=cd) is None
+
+    def test_missing_at_field_is_treated_as_expired(self, tmp_path):
+        cd = tmp_path / "config"
+        path = deletion._reviews_file(cd)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({IID: {"snapshot": {}}}) + "\n", encoding="utf-8")
+        assert deletion.fresh_review(IID, config_dir=cd) is None

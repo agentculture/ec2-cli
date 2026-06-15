@@ -246,6 +246,9 @@ def cmd_instance_delete(args: argparse.Namespace) -> int:
         from ec2.aws.client import aws_call
 
         resp = aws_call(client.terminate_instances, InstanceIds=[instance_id])
+        # Best-effort: if clearing the token fails (or the process is killed
+        # here), re-running --apply is still safe — AWS rejects a duplicate
+        # terminate on an already-terminating/gone instance.
         deletion.clear_review(instance_id, config_dir=config_dir)
 
         ti = (resp.get("TerminatingInstances") or [{}])[0]
