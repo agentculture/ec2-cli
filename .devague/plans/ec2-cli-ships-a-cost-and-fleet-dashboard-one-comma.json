@@ -1,0 +1,443 @@
+{
+  "slug": "ec2-cli-ships-a-cost-and-fleet-dashboard-one-comma",
+  "title": "ec2-cli ships a cost-and-fleet dashboard: one command shows your EC2 instances alongside spend \u2014 month-to-date, year-to-date, and forecast cost for the rest of the month and year \u2014 as a table or --json.",
+  "frame_slug": "ec2-cli-ships-a-cost-and-fleet-dashboard-one-comma",
+  "schema_version": 1,
+  "status": "exported",
+  "created": "2026-06-15T17:38:39Z",
+  "updated": "2026-06-15T17:46:05Z",
+  "targets": [
+    {
+      "id": "c1",
+      "kind": "announcement",
+      "text": "ec2-cli ships a cost-and-fleet dashboard: one command shows your EC2 instances alongside spend \u2014 month-to-date, year-to-date, and forecast cost for the rest of the month and year \u2014 as a table or --json."
+    },
+    {
+      "id": "h9",
+      "kind": "honesty",
+      "text": "A user with valid AWS creds runs 'ec2 overview' and the four figures + fleet render correctly and match the AWS console; the whole surface (overview/instance/monitor) honours --json and the structured-error contract."
+    },
+    {
+      "id": "c2",
+      "kind": "audience",
+      "text": "An AWS user (human operator or mesh agent) who wants a single at-a-glance answer to 'what am I running and what is it costing me' without opening the AWS console or stitching together describe-instances + Cost Explorer by hand."
+    },
+    {
+      "id": "h10",
+      "kind": "honesty",
+      "text": "A real user (operator or mesh agent) currently answers 'what am I running + spending' by stitching describe-instances + Cost Explorer by hand; the single command demonstrably replaces that workaround."
+    },
+    {
+      "id": "c4",
+      "kind": "before_state",
+      "text": "Today the repo has zero EC2/AWS functionality (dependencies = []); the only 'overview' is the template's descriptive agent-introspection verb. To get this answer a user must run AWS CLI describe-instances and Cost Explorer queries separately and do the math themselves."
+    },
+    {
+      "id": "h11",
+      "kind": "honesty",
+      "text": "Verified against the repo: today dependencies=[] and no EC2/AWS code exists; the only 'overview' is the descriptive introspection verb."
+    },
+    {
+      "id": "c5",
+      "kind": "why_it_matters",
+      "text": "Cost surprise is the #1 EC2 pain; a single trustworthy 'running + spend + forecast' view turns reactive bill-shock into a glanceable habit, and it's the first real domain capability that makes ec2-cli an EC2 manager rather than a scaffold."
+    },
+    {
+      "id": "h12",
+      "kind": "honesty",
+      "text": "The feature is justified only because MTD/YTD + forecast together pre-empt bill-shock; if cost-surprise weren't the driver the forecast figures would be pointless."
+    },
+    {
+      "id": "c6",
+      "kind": "success_signal",
+      "text": "A user with valid AWS credentials runs one command and sees their instances and all four cost figures correctly; --json output is machine-parseable; missing creds/permissions/region produce a structured error with a hint, never a traceback."
+    },
+    {
+      "id": "h13",
+      "kind": "honesty",
+      "text": "An end-to-end test with a mocked AWS client shows fleet + all four figures rendered, --json parseable, and error paths structured \u2014 the signal is observable, not aspirational."
+    },
+    {
+      "id": "c9",
+      "kind": "requirement",
+      "text": "MTD and YTD actual spend come from AWS Cost Explorer GetCostAndUsage (UnblendedCost, MONTHLY granularity, time periods = first-of-month..today and first-of-year..today)."
+    },
+    {
+      "id": "h1",
+      "kind": "honesty",
+      "text": "Re-running on a known account, MTD/YTD figures match the AWS Cost Explorer console for the same dates to the cent (same UnblendedCost metric, same date math)."
+    },
+    {
+      "id": "c10",
+      "kind": "requirement",
+      "text": "Forecast end-of-month and end-of-year come from AWS Cost Explorer GetCostForecast (UNBLENDED_COST) for today..end-of-month and today..end-of-year."
+    },
+    {
+      "id": "h2",
+      "kind": "honesty",
+      "text": "GetCostForecast is called with a valid future period; when AWS refuses (too little history / start must be in the future), we degrade to a clear 'forecast unavailable' line, not a crash."
+    },
+    {
+      "id": "c11",
+      "kind": "requirement",
+      "text": "The live fleet comes from EC2 DescribeInstances, summarised per instance (id, type, state, name tag, AZ) in the chosen region."
+    },
+    {
+      "id": "h3",
+      "kind": "honesty",
+      "text": "DescribeInstances pagination is handled (NextToken) so accounts with >1 page of instances are fully listed, and an empty fleet renders cleanly (not an error)."
+    },
+    {
+      "id": "c12",
+      "kind": "requirement",
+      "text": "The command honours the agent-first output contract: human table by default, --json for structured payload, results to stdout, errors to stderr, and credential/permission/region failures raise CliError -> structured error with a hint, never a traceback."
+    },
+    {
+      "id": "h4",
+      "kind": "honesty",
+      "text": "On missing creds, missing ce:/ec2: permission, and unset region, the command exits non-zero with error:/hint: lines and zero stdout \u2014 verified by tests that monkeypatch the AWS client."
+    },
+    {
+      "id": "c20",
+      "kind": "boundary",
+      "text": "It can start/stop and auto-stop instances and set tool-side spend limits, but it does NOT terminate or resize instances, and limits are tracked by this tool (local config) \u2014 it does not create AWS-native Budgets or CloudWatch alarms."
+    },
+    {
+      "id": "h14",
+      "kind": "honesty",
+      "text": "A contract/test asserts no code path calls TerminateInstances, ModifyInstanceAttribute(type), or Budgets/CloudWatch APIs \u2014 the boundary is enforced, not just stated."
+    },
+    {
+      "id": "c21",
+      "kind": "after_state",
+      "text": "'ec2 instance start|stop <id>' powers an instance up/down (with state waiters and a confirmation/--yes guard); 'ec2 instance' with no verb lists instances; 'ec2 instance limit <id> <amount> --monthly|--yearly' records a per-machine cap."
+    },
+    {
+      "id": "h15",
+      "kind": "honesty",
+      "text": "Each instance verb has a test: list renders, start/stop invoke the right AWS action behind --yes, limit persists to config and reads back."
+    },
+    {
+      "id": "c22",
+      "kind": "after_state",
+      "text": "'ec2 monitor' evaluates current spend vs limits once (and can loop every ~5 min), emitting an alert per breach/spike and, only when auto-stop is enabled for that target, stopping the offending instance; --json yields machine-parseable findings."
+    },
+    {
+      "id": "h16",
+      "kind": "honesty",
+      "text": "monitor check returns findings + non-zero exit on breach against a mocked client; the daemon loop is that same check on a timer; --json findings parse."
+    },
+    {
+      "id": "c23",
+      "kind": "requirement",
+      "text": "Per-machine and total spend limits (amount + monthly/yearly period + optional auto-stop flag) are persisted in a local config file and are the single source of truth the monitor evaluates against."
+    },
+    {
+      "id": "h5",
+      "kind": "honesty",
+      "text": "Limit config round-trips: written by 'instance limit', read identically by 'monitor', survives process restart, and a malformed/missing file degrades to a clear error or 'no limits set', not a crash."
+    },
+    {
+      "id": "c24",
+      "kind": "requirement",
+      "text": "Power verbs (start/stop) and auto-stop are write operations guarded for safety: a dry-run/preview is the default for destructive auto-stop, start/stop require confirmation or --yes, and operations are idempotent (already-running/already-stopped is a clean no-op)."
+    },
+    {
+      "id": "h6",
+      "kind": "honesty",
+      "text": "Tests prove start/stop are idempotent and that auto-stop in default (dry-run/alert-only) mode never calls StopInstances \u2014 verified by monkeypatching the AWS client and asserting no mutating call."
+    },
+    {
+      "id": "c25",
+      "kind": "requirement",
+      "text": "Auto-stop never fires unless explicitly enabled per-target (opt-in); the default monitor behaviour is alert-only."
+    },
+    {
+      "id": "h8",
+      "kind": "honesty",
+      "text": "A test confirms that with auto-stop disabled (the default) a breached limit produces an alert but zero StopInstances calls; auto-stop only fires when the target's limit was set with the explicit auto-stop flag."
+    },
+    {
+      "id": "c30",
+      "kind": "after_state",
+      "text": "'ec2 overview' prints the live EC2 fleet plus four EC2-service spend figures \u2014 MTD actual, YTD actual, forecast end-of-month, forecast end-of-year \u2014 as a human table and, with --json, a structured payload; the descriptive agent self-report moves to 'cli overview' so the rubric stays green."
+    },
+    {
+      "id": "h17",
+      "kind": "honesty",
+      "text": "overview renders fleet + four EC2-service figures while 'cli overview' still emits the descriptive self-report, and 'teken cli doctor . --strict' stays 26/26."
+    },
+    {
+      "id": "c35",
+      "kind": "requirement",
+      "text": "The monitor's per-machine cost figure is the layered estimate: pick spot vs on-demand rate by InstanceLifecycle, multiply by running hours, add attached-EBS cost (counted even when the instance is stopped); label it an estimate and list exclusions (RI/SP, data transfer)."
+    },
+    {
+      "id": "h18",
+      "kind": "honesty",
+      "text": "Tests show: a spot instance is priced at the spot rate (not on-demand), attached EBS is included even for a STOPPED instance, output labels the figure an estimate and names its exclusions, and a missing rate/volume lookup degrades cleanly via the fallback chain rather than crashing."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "summary": "AWS client layer + boto3 wiring + error mapping",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "build_client(service, region) lazy-imports boto3; missing boto3 raises CliError code 2 with a pip-install hint, not ImportError",
+        "Missing creds, AccessDenied for ce:/ec2:, and unset region each map to CliError with error:/hint: and non-zero exit, asserted by monkeypatching boto3; stdout stays empty"
+      ],
+      "deps": [],
+      "covers": [
+        "c12",
+        "h4"
+      ]
+    },
+    {
+      "id": "t2",
+      "summary": "Spend-limit config store (local file)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "save/load round-trip a limit (target, amount, period in monthly|yearly, auto_stop flag) through a local config file; reload after restart is identical",
+        "A malformed or missing config file yields a clear no-limits-set or structured error, never a traceback"
+      ],
+      "deps": [],
+      "covers": [
+        "c23",
+        "h5"
+      ]
+    },
+    {
+      "id": "t3",
+      "summary": "Cost Explorer module: MTD/YTD actuals + month/year forecast (EC2-filtered)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "cost_mtd/cost_ytd call GetCostAndUsage with UnblendedCost, an EC2-service filter, and ranges first-of-month..today and first-of-year..today, asserted via a mocked CE client",
+        "forecast_month/forecast_year call GetCostForecast for today..end-of-month/year; when CE raises a data-unavailable/validation error the function returns a forecast-unavailable sentinel instead of raising"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c9",
+        "c10",
+        "h1",
+        "h2"
+      ]
+    },
+    {
+      "id": "t4",
+      "summary": "Fleet module: DescribeInstances with pagination + per-instance summary",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "list_instances pages through DescribeInstances via NextToken and returns every instance across more than one page, asserted with a two-page mocked response",
+        "Each instance summarised as id, type, state, name-tag, az; an empty account returns an empty list and renders cleanly, not an error"
+      ],
+      "deps": [
+        "t1"
+      ],
+      "covers": [
+        "c11",
+        "h3"
+      ]
+    },
+    {
+      "id": "t5",
+      "summary": "Per-machine layered cost estimate: spot/on-demand rate x hours + EBS",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "estimate picks the spot price when InstanceLifecycle is spot and on-demand otherwise, multiplies by running hours, and adds attached-EBS cost counted even when the instance is stopped, asserted with mocked pricing and volumes",
+        "Output labels the figure an estimate and lists exclusions (RI/SP, data transfer); a missing rate or volume lookup degrades via the fallback chain instead of raising"
+      ],
+      "deps": [
+        "t1",
+        "t4"
+      ],
+      "covers": [
+        "c35",
+        "h18"
+      ]
+    },
+    {
+      "id": "t6",
+      "summary": "ec2 overview command + move descriptive self-report to cli overview",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "ec2 overview renders the fleet plus four EC2-service figures (MTD, YTD, forecast end-of-month, forecast end-of-year); --json emits a parseable payload; results go to stdout only",
+        "cli overview still emits the descriptive agent self-report and uv run teken cli doctor . --strict stays 26/26"
+      ],
+      "deps": [
+        "t3",
+        "t4"
+      ],
+      "covers": [
+        "c30",
+        "h17"
+      ]
+    },
+    {
+      "id": "t7",
+      "summary": "ec2 instance noun: list / start / stop / limit",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "ec2 instance lists instances; instance start|stop id invokes the matching AWS action only behind confirmation or --yes and is idempotent (already-running start / already-stopped stop is a clean no-op) on a mocked client",
+        "instance limit id amount --monthly|--yearly [--auto-stop] persists via the limit store and reads back identically"
+      ],
+      "deps": [
+        "t1",
+        "t2",
+        "t4"
+      ],
+      "covers": [
+        "c21",
+        "c24",
+        "h15",
+        "h6"
+      ]
+    },
+    {
+      "id": "t8",
+      "summary": "Monitor evaluator + check logic (spend vs limits, findings, auto-stop gating)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "evaluate compares per-machine (layered estimate) and total (Cost Explorer) spend against configured limits and returns findings with a breach flag; --json findings parse",
+        "With auto-stop disabled (default) a breached limit yields an alert finding but zero StopInstances calls; auto-stop is proposed only for targets whose limit set the explicit auto-stop flag, asserted on a mocked client",
+        "Spike detection uses run-rate projection: a finding is raised when projected end-of-period spend (current run-rate extrapolated to month/year end) exceeds the limit, asserted with a mocked spend fixture"
+      ],
+      "deps": [
+        "t2",
+        "t3",
+        "t5"
+      ],
+      "covers": [
+        "c25",
+        "h6",
+        "h8"
+      ]
+    },
+    {
+      "id": "t9",
+      "summary": "Monitor alerters: CULTURE.DEV mesh + stderr baseline, OTEL/webhook optional",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "On a breach finding the CULTURE.DEV mesh alerter and the stderr baseline both emit a structured alert; OTEL-log and webhook alerters are optional and lazy-imported so an absent dependency disables the channel rather than crashing"
+      ],
+      "deps": [
+        "t8"
+      ],
+      "covers": [
+        "c22"
+      ]
+    },
+    {
+      "id": "t10",
+      "summary": "Monitor CLI + daemon: check / start / stop / status (pidfile, ~5 min loop)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "ec2 monitor check runs evaluate once, routes findings to enabled alerters, and exits non-zero on any breach; --json prints findings",
+        "ec2 monitor start|stop|status manages a background loop via a pidfile (start writes pid, status reports running/stopped, stop terminates); the loop body is check on a ~5-minute timer"
+      ],
+      "deps": [
+        "t8",
+        "t9"
+      ],
+      "covers": [
+        "c22",
+        "h16"
+      ]
+    },
+    {
+      "id": "t11",
+      "summary": "Wire verbs into parser + explain catalog + boundary contract test",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "overview/instance/monitor are registered in _build_parser() and each has an explain catalog entry; the catalog-resolves test passes for the new keys",
+        "A boundary contract test asserts no code path references TerminateInstances, ModifyInstanceAttribute for type, or Budgets/CloudWatch APIs"
+      ],
+      "deps": [
+        "t6",
+        "t7",
+        "t10"
+      ],
+      "covers": [
+        "c20",
+        "h14"
+      ]
+    },
+    {
+      "id": "t12",
+      "summary": "README + rationale docs (audience, before-state, why-it-matters, usage)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "README documents the audience, the before-state (console + Cost Explorer stitching), the why (bill-shock), and usage for overview/instance/monitor; markdownlint-cli2 passes"
+      ],
+      "deps": [
+        "t11"
+      ],
+      "covers": [
+        "c2",
+        "c4",
+        "c5",
+        "h10",
+        "h11",
+        "h12"
+      ]
+    },
+    {
+      "id": "t13",
+      "summary": "End-to-end integration test (mocked AWS client, whole surface)",
+      "origin": "llm",
+      "status": "confirmed",
+      "acceptance_criteria": [
+        "An end-to-end test with a fully mocked AWS client runs ec2 overview and asserts fleet + all four figures render and --json parses, and that missing-creds/permission/region paths produce structured errors with zero stdout"
+      ],
+      "deps": [
+        "t11"
+      ],
+      "covers": [
+        "c1",
+        "c6",
+        "h9",
+        "h13"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "id": "r1",
+      "text": "Spend-spike detection is unspecified in the spec; v1 default = projected end-of-period spend (run-rate) exceeding the limit, plus an optional percent-jump vs trailing average. Needs confirmation before t8 lands.",
+      "kind": "unknown_nonblocking",
+      "task_id": "t8"
+    },
+    {
+      "id": "r2",
+      "text": "CI cannot hit live Cost Explorer (per-call cost + ~24h activation), so all AWS interaction is tested via mocked clients; figure-accuracy honesty (h1) is validated against fixtures plus a manual live check before release.",
+      "kind": "unknown_nonblocking",
+      "task_id": null
+    },
+    {
+      "id": "r3",
+      "text": "Daemon pidfile/process model is POSIX-oriented; Windows supervision is out of scope for this plan.",
+      "kind": "out_of_scope",
+      "task_id": "t10"
+    },
+    {
+      "id": "r4",
+      "text": "Phase-2 on-machine cost reporter to CloudWatch Logs (parked in the frame) is explicitly out of this plan's scope.",
+      "kind": "follow_up",
+      "task_id": null
+    }
+  ]
+}
