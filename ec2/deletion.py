@@ -13,6 +13,7 @@ never silently arm a later ``--apply``.
 from __future__ import annotations
 
 import json
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -60,10 +61,15 @@ def fresh_review(
     rec = _read(_reviews_file(config_dir)).get(instance_id)
     if not isinstance(rec, dict):
         return None
+    at = _parse_at(rec.get("at"))
+    if at is None:
+        # Missing, non-numeric, or non-finite `at` -> no usable timestamp.
+        # Fail *safe*: treat the token as expired rather than crashing or (worse)
+        # letting NaN/Inf defeat the TTL check and arm a stale `--apply`.
+        return None
     # `>` (not `>=`): a review at exactly the TTL boundary is still valid; the
-    # window closes strictly *after* ttl seconds. A missing/corrupt `at` -> 0,
-    # which makes `stamp - 0 > ttl` true -> treated as expired (conservative).
-    if stamp - float(rec.get("at", 0)) > ttl:
+    # window closes strictly *after* ttl seconds.
+    if stamp - at > ttl:
         return None
     return rec
 
@@ -78,6 +84,22 @@ def clear_review(instance_id: str, *, config_dir: Path | None = None) -> None:
 
 
 # -- private helpers --------------------------------------------------------
+
+
+def _parse_at(value: Any) -> float | None:
+    """Coerce a persisted ``at`` timestamp to a finite float, else ``None``.
+
+    The review file is local state that can be hand-edited or corrupted. A
+    non-numeric value (``float(...)`` raises) or a non-finite float — ``json``
+    accepts ``NaN``/``Infinity`` by default, and ``stamp - NaN > ttl`` is
+    ``False``, which would make a stale token look perpetually fresh — must
+    fail safe: return ``None`` so the caller treats it as an expired token.
+    """
+    try:
+        at = float(value)
+    except (TypeError, ValueError):
+        return None
+    return at if math.isfinite(at) else None
 
 
 def _read(path: Path) -> dict[str, Any]:

@@ -177,3 +177,23 @@ class TestDeletionStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({IID: {"snapshot": {}}}) + "\n", encoding="utf-8")
         assert deletion.fresh_review(IID, config_dir=cd) is None
+
+    def test_non_numeric_at_is_treated_as_expired(self, tmp_path):
+        # A hand-edited/corrupt `at` must not crash `--apply` (ValueError).
+        cd = tmp_path / "config"
+        path = deletion._reviews_file(cd)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({IID: {"at": "garbage", "snapshot": {}}}) + "\n", encoding="utf-8"
+        )
+        assert deletion.fresh_review(IID, config_dir=cd, now=0.0) is None
+
+    def test_non_finite_at_does_not_arm_a_stale_token(self, tmp_path):
+        # json.loads accepts NaN/Infinity; both must fail safe (expired), never
+        # defeat the TTL comparison and leave a stale review perpetually fresh.
+        cd = tmp_path / "config"
+        path = deletion._reviews_file(cd)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for bad in ("NaN", "Infinity", "-Infinity"):
+            path.write_text('{"%s": {"at": %s, "snapshot": {}}}\n' % (IID, bad), encoding="utf-8")
+            assert deletion.fresh_review(IID, config_dir=cd, now=10**9) is None

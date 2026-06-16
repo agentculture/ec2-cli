@@ -15,6 +15,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Boundary: instance termination is no longer a non-goal — it is now a deliberate, review-gated feature. The boundary contract test still forbids resize (ModifyInstanceAttribute) and native budget/alarm APIs, but allows terminate_instances via ec2 instance delete.
 
+### Fixed
+
+- Deletion review gate fails safe on a corrupt token timestamp: `fresh_review()` now coerces the persisted `at` through `_parse_at()`, treating a non-numeric value (previously crashed `--apply`) or a non-finite float (`NaN`/`Infinity`, which `json` accepts and which defeated the TTL comparison, leaving a stale token perpetually "fresh") as an expired token.
+
 ## [0.4.0] - 2026-06-15
 
 ### Added
