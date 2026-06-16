@@ -35,14 +35,22 @@ ec2 overview --json
 
 ### `ec2 instance`
 
-Manage instances — list, start, stop, and set spend limits.
+Manage instances — list, start, stop, set spend limits, and delete.
 
 ```bash
 ec2 instance                          # list instances
 ec2 instance start <id> --yes       # start an instance
 ec2 instance stop <id> --yes        # stop an instance
 ec2 instance limit <id> <amount> --monthly  # set a spend cap
+ec2 instance delete <id>            # review what termination would destroy
+ec2 instance delete <id> --apply    # terminate (only after a fresh review)
 ```
+
+`delete` is the one irreversible verb: it is gated behind a two-step
+**review → `--apply`** flow. `ec2 instance delete <id>` prints what would be
+destroyed (the instance and its EBS volumes) and records a short-lived review
+token; `--apply` terminates only when a fresh review (within 15 minutes) exists
+for that id.
 
 ### `ec2 monitor`
 

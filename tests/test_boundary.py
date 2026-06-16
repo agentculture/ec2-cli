@@ -1,9 +1,12 @@
 """Boundary contract: ec2/ must not reference forbidden AWS APIs.
 
-The project deliberately avoids TerminateInstances, ModifyInstanceAttribute
-(for instance type changes), and AWS Budgets / CloudWatch alarm APIs.  This
-test scans every ``.py`` source file under ``ec2/`` and asserts that none of
-those strings appear.
+The project deliberately avoids resize (ModifyInstanceAttribute for instance
+type) and AWS Budgets / CloudWatch alarm APIs. This test scans every ``.py``
+source file under ``ec2/`` and asserts that none of those strings appear.
+
+Note: instance *termination* used to be forbidden here too, but it is now a
+deliberate, review-gated feature (``ec2 instance delete --apply`` — see
+:mod:`ec2.deletion`), so ``terminate_instances`` is intentionally allowed.
 """
 
 from __future__ import annotations
@@ -15,10 +18,8 @@ import pytest
 # Both the PascalCase API names (catch docstrings/comments implying the
 # capability) AND the snake_case boto3 client methods / service identifiers a
 # *real* call uses — checking only PascalCase is vacuous, because boto3 clients
-# are invoked as client.terminate_instances(...) / build_client("budgets").
+# are invoked as client.modify_instance_attribute(...) / build_client("budgets").
 _FORBIDDEN = [
-    "TerminateInstances",
-    "terminate_instances",
     "ModifyInstanceAttribute",
     "modify_instance_attribute",
     "Budgets",

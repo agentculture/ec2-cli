@@ -121,9 +121,9 @@ _INSTANCE = """\
 # ec2 instance
 
 Noun group for EC2 instance management. Lists instances by default; sub-verbs
-handle start, stop, and spend-limit operations. All mutating actions are
-idempotent: if the instance is already in the target state, no AWS call is
-made.
+handle start, stop, spend-limit, and delete operations. Power actions
+(start/stop) are idempotent: if the instance is already in the target state, no
+AWS call is made.
 
 ## Sub-commands
 
@@ -131,6 +131,8 @@ made.
 - `ec2 instance start <id>` — start an instance (requires `--yes`)
 - `ec2 instance stop <id>` — stop an instance (requires `--yes`)
 - `ec2 instance limit <id> <amount>` — persist a spend limit
+- `ec2 instance delete <id>` — review a termination; `--apply` terminates
+  (irreversible — see `ec2 explain instance delete`)
 
 ## Usage
 
@@ -138,6 +140,33 @@ made.
     ec2 instance start i-0abc123 --yes
     ec2 instance stop i-0abc123 --yes
     ec2 instance limit i-0abc123 100 --monthly
+    ec2 instance delete i-0abc123            # review only
+    ec2 instance delete i-0abc123 --apply    # terminate (after review)
+"""
+
+_INSTANCE_DELETE = """\
+# ec2 instance delete
+
+Terminate an instance — the one irreversible verb, gated behind a two-step
+**review → apply** flow so a termination is never a single fat-fingered command.
+
+## How it works
+
+1. `ec2 instance delete <id>` — *review only*. Prints what would be destroyed
+   (the instance and each attached EBS volume, flagged by DeleteOnTermination),
+   records a short-lived review token, and exits 0 **without terminating**.
+2. `ec2 instance delete <id> --apply` — terminates, but **only** if a fresh
+   review token for that exact id exists (recorded within the last 15 minutes).
+   A missing or stale review is a structured error (exit 1) telling you to
+   review first. The token is cleared on success.
+
+`--json` is supported on both steps. This is the only verb that terminates;
+instance resize and native AWS budget/alarm objects stay out of scope.
+
+## Usage
+
+    ec2 instance delete i-0abc123            # step 1: review
+    ec2 instance delete i-0abc123 --apply    # step 2: terminate (within 15 min)
 """
 
 _MONITOR = """\
@@ -180,6 +209,7 @@ ENTRIES: dict[tuple[str, ...], str] = {
     ("instance", "start"): _INSTANCE,
     ("instance", "stop"): _INSTANCE,
     ("instance", "limit"): _INSTANCE,
+    ("instance", "delete"): _INSTANCE_DELETE,
     ("monitor",): _MONITOR,
     ("monitor", "check"): _MONITOR,
     ("monitor", "start"): _MONITOR,
