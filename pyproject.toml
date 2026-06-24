@@ -1,6 +1,6 @@
 [project]
 name = "ec2-cli"
-version = "0.6.0"
+version = "0.7.0"
 description = "Agent and CLI for managing AWS EC2 machines (instances) — launch, inspect, start/stop, and operate fleets."
 readme = "README.md"
 license = "MIT"
